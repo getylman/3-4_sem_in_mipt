@@ -11,7 +11,8 @@ class Graph {
   virtual size_t NumOfVertexes() const = 0;
   virtual size_t NumOfEdges() const = 0;
   virtual std::vector<VertexT*>& GetNeighbours(const VertexT&) = 0;
-  // virtual method - get by vertex iterator to its neighbours
+  // virtual std::unordered_map<VertexT, > еще не придумал как сделать это
+  // красиво
   virtual ~Graph() = default;
 };
 
@@ -28,32 +29,33 @@ class AMGraph : public Graph<VertexT, EdgeT> {
 };
 
 template <typename VertexT = size_t,
-          typename EdgeT = std::pair<VertexT, VertexT>>
+          typename EdgeT = std::pair<VertexT, VertexT>, bool Directed = true>
 class ALGraph : public Graph<VertexT, EdgeT> {
   // adj list
   enum Color { WHITE, GRAY, BLACK };
   struct NodeEdge {
-    EdgeT value;                 // значение ребра
-    size_t weight = 1;           // вес
-    size_t number = size_t(-1);  // его номер
+    EdgeT value;                             // значение ребра
+    size_t weight = 1;                       // вес
+    size_t number = size_t(-1);              // его номер
     std::pair<VertexT, VertexT> connection;  // какие вершины он соединяет
   };
   struct NodeVertex {
-    VertexT value;               // знвчение вершины
-    size_t number = size_t(-1);  // его номер
-    size_t t_in = size_t(-1);    // время захода
-    size_t t_in_min = size_t(-1);  // минимальное время захода
-    size_t t_out = size_t(-1);  // время выхода
+    VertexT value;                  // знвчение вершины
+    size_t number = size_t(-1);     // его номер
+    size_t t_in = size_t(-1);       // время захода
+    size_t t_in_min = size_t(-1);   // минимальное время захода
+    size_t t_out = size_t(-1);      // время выхода
     size_t t_out_min = size_t(-1);  // минимальное время выхода
-    Color color = Color::WHITE;  // цвет вершины
+    Color color = Color::WHITE;     // цвет вершины
     std::unordered_map<VertexT, std::vector<NodeEdge>>
-        neighbours;  // для случая с кратными ребрами
+        neighbours;                 // для случая с кратными ребрами
   };
-  NodeEdge SetNodeEdge(const EdgeT& value, const size_t& number,
-                       const std::pair<size_t, size_t>& connection,
-                       const size_t& weight = 1) { // для создания ребра
-                                                   // мне на тот момент не хотелось писать конструктор
-                                                   // может и напишу но позже
+  NodeEdge SetNodeEdge(
+      const EdgeT& value, const size_t& number,
+      const std::pair<size_t, size_t>& connection,
+      const size_t& weight = 1) {  // для создания ребра
+                                   // мне на тот момент не хотелось писать
+                                   // конструктор может и напишу но позже
     NodeEdge node;
     node.connection = connection;
     node.number = number;
@@ -65,24 +67,24 @@ class ALGraph : public Graph<VertexT, EdgeT> {
   std::unordered_map<VertexT, NodeVertex>
       graph_;  // храню граф как список смежности и по запросу на
                // значение вершины могу определить его соседей и не только
-  // std::vector<EdgeT> edges_; // пока не знаю зачем
-  size_t num_of_edges_ = 0; // количество ребер
-  size_t num_of_vertexes_ = 0; // количество вершин
+  std::vector<EdgeT> edges_; // пока не знаю зачем
+  size_t num_of_edges_ = 0;     // количество ребер
+  size_t num_of_vertexes_ = 0;  // количество вершин
 
  public:
   using vertex_type = VertexT;
   using edge_type = EdgeT;
-  ALGraph(const bool& directed, const size_t& num_of_vertexes,
+  ALGraph(const size_t& num_of_vertexes,
           const std::vector<EdgeT>& edges)
       : num_of_edges_(edges.size()),
         num_of_vertexes_(num_of_vertexes),
-        edges_(edges) { // конструктор графа от вектора ребер
+        edges_(edges) {  // конструктор графа от вектора ребер
     size_t counter_edge = 0;
     size_t counter_vertex = 0;
     std::pair<vertex_type, vertex_type> tmp_edge;
     NodeVertex tmp_node_vertex;
     NodeEdge tmp_node_edge;
-    if (directed) {  // для ориентированного графа
+    if (Directed) {  // для ориентированного графа
       for (const auto& i : edges) {
         tmp_edge = reinterpret_cast<std::pair<vertex_type, vertex_type>>(i);
         // если не скастится то не мои проблемы)))
@@ -106,7 +108,8 @@ class ALGraph : public Graph<VertexT, EdgeT> {
       for (const auto& i : edges) {
         tmp_edge = reinterpret_cast<std::pair<vertex_type, vertex_type>>(i);
         // если не скастится то не мои проблемы)))
-        if (graph_.count(tmp_edge.first) != 0) { // для случая когда есть первая вершина
+        if (graph_.count(tmp_edge.first) !=
+            0) {  // для случая когда есть первая вершина
           if (graph_[tmp_edge.first].neighbours.count(tmp_edge.second) != 0) {
             // для случая когда есть вторая вершина
             graph_[tmp_edge.first].neighbours[tmp_edge.second].push_back(
@@ -145,15 +148,33 @@ class ALGraph : public Graph<VertexT, EdgeT> {
       }
     }
   }
-  size_t NumOfVertexes() const final {
-    return graph_.size();
-  }
-  size_t NumOfEdges() const final {
-    return num_of_edges_;
-  }
+  size_t NumOfVertexes() const final { return graph_.size(); }
+  size_t NumOfEdges() const final { return num_of_edges_; }
   std::vector<VertexT*>& GetNeighbours(const VertexT& vertex) final {
     return graph_[vertex];
   }
+  std::unordered_map<VertexT, NodeEdge>::iterator& GetIteratorOfNeighboursList(
+      const VertexT& vertex) { return graph_[vertex].neighbours.begin(); }
+};
+
+template <typename VertexT, typename EdgeT>
+class Visitor {
+ public:
+  virtual void DiscoverVertex(VertexT&, Graph<VertexT, EdgeT>&) = 0;
+  virtual ~Visitor() = default;
+};
+
+template <typename VertexT, typename EdgeT>
+class DFS : public Visitor<VertexT, EdgeT> {
+ public:
+  
+ private:
+   
+};
+
+template <typename VertexT, typename EdgeT>
+class Solution {
+
 };
 
 int main() {
