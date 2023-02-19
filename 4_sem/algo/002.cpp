@@ -106,8 +106,9 @@ class ALGraph : public Graph<VertexT, EdgeT> {
       for (const auto& i : edges) {
         tmp_edge = reinterpret_cast<std::pair<vertex_type, vertex_type>>(i);
         // если не скастится то не мои проблемы)))
-        if (graph_.count(tmp_edge.first) != 0) {
+        if (graph_.count(tmp_edge.first) != 0) { // для случая когда есть первая вершина
           if (graph_[tmp_edge.first].neighbours.count(tmp_edge.second) != 0) {
+            // для случая когда есть вторая вершина
             graph_[tmp_edge.first].neighbours[tmp_edge.second].push_back(
                 SetNodeEdge(i, ++counter_edge, tmp_edge));
           } else {
