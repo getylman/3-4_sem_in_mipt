@@ -5,6 +5,7 @@
  */
 #pragma once
 #include <memory>
+#include <type_traits>
 
 
 template <typename T, typename Allocator = std::allocator<T>>
@@ -39,9 +40,17 @@ class Deque {
   void pop_front();
   //==============================================
   //==================ITERATOR====================
-  struct iterator {
-
+  template <bool IsConst>
+  struct common_iterator {
+   private:
+    using conditional_ptr = std::conditional_t<IsConst, const T, T>;
+    conditional_ptr* ptr;
+   public:
+    conditional_ptr& operator*() { return *ptr; }
+    conditional_ptr* operator->() { return ptr; }
   };
+  using iterator = common_iterator<false>;
+  using const_iterator = common_iterator<true>;
   //==============================================
  private:
   const uint64_t kChunkSize = 0; // size of chunks
@@ -50,3 +59,10 @@ class Deque {
   uint64_t lc_size_ = 0; // last chunk size
 };
 //using Deque = std::deque<T>;
+
+
+
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//               DECLARATION
+
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
