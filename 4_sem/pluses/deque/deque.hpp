@@ -8,16 +8,16 @@
 #include <type_traits>
 
 
-template <typename T, typename Allocator = std::allocator<T>>
+template <typename T, typename Alloc = std::allocator<T>>
 class Deque {
  public:
   //=================Constructors=================
   Deque();
   Deque(const size_t& count);
   Deque(const size_t& count, const T& value);
-  Deque(const Deque<T, Allocator>& deq);
+  Deque(const Deque<T, Alloc>& deq);
   ~Deque();
-  Deque<T, Allocator>& operator=(cosnt Deque<T, Allocator>& deq);
+  Deque<T, Alloc>& operator=(cosnt Deque<T, Alloc>& deq);
   //==============================================
   //=============Accessing an element=============
   T& operator[](const size_t& index);
