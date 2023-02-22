@@ -23,6 +23,10 @@ class Deque {
   const T& operator[](const size_t& index) const;
   T& at(const size_t& index);
   const T& at(const size_t& index) const;
+  T& front();
+  const T& front() const;
+  T& back();
+  const T& back() const;
   //==============================================
   //==============SizeInformation=================
   size_t size() const { return total_size_; }
@@ -36,7 +40,7 @@ class Deque {
   //==============================================
   //==================ITERATOR====================
   struct iterator {
-    
+
   };
   //==============================================
  private:
