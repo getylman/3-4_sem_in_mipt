@@ -46,8 +46,25 @@ class Deque {
     using conditional_ptr = std::conditional_t<IsConst, const T, T>;
     conditional_ptr* ptr;
    public:
+    //****************Memory operators************
     conditional_ptr& operator*() { return *ptr; }
     conditional_ptr* operator->() { return ptr; }
+    template <typename T1>
+    T1& operator->*(T1 T::*another_ptr) { return (*ptr).*another_ptr; }
+    //********************************************
+    //************Aithmetic operators*************
+    common_iterator<IsConst>& operator+=(const int64_t& delta);
+    common_iterator<IsConst>& operator-=(const int64_t& delta);
+    common_iterator<IsConst> operator+(const int64_t& delta);
+    common_iterator<IsConst> operator-(const int64_t& delta);
+    common_iterator<IsConst>& operator++();
+    common_iterator<IsConst>& operator--();
+    common_iterator<IsConst>& operator++(int);
+    common_iterator<IsConst>& operator--(int);
+    //********************************************
+    //**************Compare operators*************
+    // bool operator<()
+    //********************************************
   };
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
