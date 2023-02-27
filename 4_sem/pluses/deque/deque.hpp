@@ -12,7 +12,7 @@ template <typename T, typename Alloc = std::allocator<T>>
 class Deque {
  public:
   //=================Constructors=================
-  Deque();
+  Deque(); // check https://habr.com/ru/post/505632/
   Deque(const size_t& count);
   Deque(const size_t& count, const T& value);
   Deque(const Deque<T, Alloc>& deq);
@@ -71,6 +71,15 @@ class Deque {
   };
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
+  template <typename Iterator>
+  class common_reverse_iterator {
+    Iterator iter;
+   public:
+    common_reverse_iterator<Iterator>& operator++();
+    // есть у меня в конспекте
+    // common_reverse_iterator<>
+    // мб скип тк написано можно использовать стандартный
+  };
   //==============================================
  private:
   const uint64_t kChunkSize = 0; // size of chunks
