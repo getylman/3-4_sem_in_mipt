@@ -74,6 +74,9 @@ class Deque {
     TempT1& operator->*(TempT1 TempT::*another_ptr) const noexcept {
       return (*ptr).*another_ptr;
     }
+    conditional_ref operator[](const int64_t& idx) const noexcept {
+      return *(ptr + idx);
+    }
     //********************************************
     //************Aithmetic operators*************
     common_iterator<IsConst>& operator+=(const int64_t& delta) noexcept;
@@ -86,23 +89,23 @@ class Deque {
     common_iterator<IsConst>& operator--(int) noexcept;
     //********************************************
     //**************Compare operators*************
-    // bool operator<()
+    friend bool operator<(
+        const typename Deque<TempT, Alloc>::common_iterator<IsConst>& iter_left,
+        const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
+            iter_right) noexcept {
+      return iter_left.ptr < iter_right.ptr;
+    }
     //********************************************
   };
+  //**************Iterator usings*****************
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
-  using reverse_iterator = std::reverse_iterator<iterator>;
-  using const_reverse_iterator = std::reverse_iterator<cosnt_iterator>;
-  // template <typename Iterator>
-  // class common_reverse_iterator {
-  //   Iterator iter;
-  // 
-  //  public:
-  //   common_reverse_iterator<Iterator>& operator++();
-  //   // есть у меня в конспекте
-  //   // common_reverse_iterator<>
-  //   // мб скип тк написано можно использовать стандартный
-  // };
+  template <bool IsConst>
+  using common_reverse_iterator =
+      std::reverse_iterator<common_iterator<IsConst>>;
+  using reverse_iterator = common_reverse_iterator<true>;
+  using const_reverse_iterator = common_reverse_iterator<false>;
+  //**********************************************
   //==============================================
  private:
   const uint64_t kChunkSize = 0;  // size of chunks
@@ -110,18 +113,48 @@ class Deque {
   uint64_t fc_size_ = 0;          // first chunk size
   uint64_t lc_size_ = 0;          // last chunk size
 };
+
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //           NO MEMBER DEFINITION
 //=================ITERATOR==================
-template <typename TempT, typename Alloc = std::allocator<TempT>>
-typename Deque<TempT, Alloc>::iterator::difference_type operator-(
-    const typename Deque<TempT, Alloc>::iterator& it1,
-    const typename Deque<TempT, Alloc>::iterator& it2);
-
-template <typename TempT, typename Alloc = std::allocator<TempT>>
-typename Deque<TempT, Alloc>::const_iterator::difference_type operator-(
-    const typename Deque<TempT, Alloc>::const_iterator& it1,
-    const typename Deque<TempT, Alloc>::const_iterator& it2);
+//***********Arithmetic operators************
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+typename Deque<TempT, Alloc>::common_iterator<IsConst>::difference_type
+operator-(const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+          const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2);
+//*******************************************
+//*************Compare operators*************
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+bool operator>(
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+  return it2 < it1;
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+bool operator>=(
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+  return !(it1 < it2);
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+bool operator<=(
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+  return !(it1 > it2);
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+bool operator==(
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+  return !(it1 < it2 || it1 > it2);
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+bool operator!=(
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+  return !(it1 == it2);
+}
+//*******************************************
 //===========================================
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
