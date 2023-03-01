@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 27.02.2023
+ * @date 01.03.2023
  */
 #pragma once
 #include <iterator>
@@ -10,6 +10,16 @@
 
 template <typename TempT, typename Alloc = std::allocator<TempT>>
 class Deque {
+ protected:
+  using allocator_type = Alloc;
+  using Alloc_traits = std::allocator_traits<allocator_type>;
+  using Pntr = Alloc_traits::pointer;
+  using Pntr_Const = Alloc_traits::const_pointer;
+/**
+ * @details
+ *   bla bla
+ * 
+ */
  public:
   //=================Constructors=================
   Deque();  // check https://habr.com/ru/post/505632/
@@ -61,6 +71,7 @@ class Deque {
     using conditional_ref =
         std::conditional_t<IsConst, const reference, reference>;
     conditional_ptr ptr;
+    // ещё надо хранить указатель к каком именно чанке находимся
     //********************************************
    public:
     //****************Memory operators************
@@ -94,6 +105,7 @@ class Deque {
         const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
             iter_right) noexcept {
       return iter_left.ptr < iter_right.ptr;
+      // тут надо проверять находимся ли мы в одном чанке или нет
     }
     //********************************************
   };
@@ -127,31 +139,31 @@ operator-(const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator>(
     const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) noexcept {
   return it2 < it1;
 }
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator>=(
     const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) noexcept {
   return !(it1 < it2);
 }
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator<=(
     const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) noexcept {
   return !(it1 > it2);
 }
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator==(
     const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) noexcept {
   return !(it1 < it2 || it1 > it2);
 }
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator!=(
     const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) {
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2) noexcept {
   return !(it1 == it2);
 }
 //*******************************************
