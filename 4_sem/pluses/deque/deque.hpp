@@ -8,52 +8,52 @@
 #include <type_traits>
 
 
-template <typename T, typename Alloc = std::allocator<T>>
+template <typename TempT, typename Alloc = std::allocator<TempT>>
 class Deque {
  public:
   //=================Constructors=================
   Deque(); // check https://habr.com/ru/post/505632/
   Deque(const size_t& count);
-  Deque(const size_t& count, const T& value);
+  Deque(const size_t& count, const TempT& value);
   Deque(const Deque<T, Alloc>& deq);
   ~Deque();
-  Deque<T, Alloc>& operator=(cosnt Deque<T, Alloc>& deq);
+  Deque<TempT, Alloc>& operator=(cosnt Deque<TempT, Alloc>& deq);
   //==============================================
   //=============Accessing an element=============
-  T& operator[](const size_t& index);
-  const T& operator[](const size_t& index) const;
-  T& at(const size_t& index);
-  const T& at(const size_t& index) const;
-  T& front();
-  const T& front() const;
-  T& back();
-  const T& back() const;
+  TempT& operator[](const size_t& index);
+  const TempT& operator[](const size_t& index) const;
+  TempT& at(const size_t& index);
+  const TempT& at(const size_t& index) const;
+  TempT& front();
+  const TempT& front() const;
+  TempT& back();
+  const TempT& back() const;
   //==============================================
   //==============SizeInformation=================
   size_t size() const { return total_size_; }
   bool empty() const { return size() == 0; }
   //==============================================
   //===========Modification methods===============
-  void push_back(const T& elem);
-  void push_back(T&& elem);
+  void push_back(const TempT& elem);
+  void push_back(TempT&& elem);
   void pop_back();
-  void push_front(const T& elem);
-  void push_front(T&& elem);
+  void push_front(const TempT& elem);
+  void push_front(TempT&& elem);
   void pop_front();
   //==============================================
   //==================ITERATOR====================
   template <bool IsConst>
   struct common_iterator {
    private:
-    using conditional_ptr = std::conditional_t<IsConst, const T*, T*>;
-    using conditional_ref = std::conditional_t<IsConst, const T&, T&>;
+    using conditional_ptr = std::conditional_t<IsConst, const TempT*, TempT*>;
+    using conditional_ref = std::conditional_t<IsConst, const TempT&, TempT&>;
     conditional_ptr ptr;
    public:
     //****************Memory operators************
     conditional_ref operator*() { return *ptr; }
     conditional_ptr operator->() { return ptr; }
-    template <typename T1>
-    T1& operator->*(T1 T::*another_ptr) { return (*ptr).*another_ptr; }
+    template <typename TempT1>
+    TempT1& operator->*(TempT1 TempT::*another_ptr) { return (*ptr).*another_ptr; }
     //********************************************
     //************Aithmetic operators*************
     common_iterator<IsConst>& operator+=(const int64_t& delta);
@@ -67,6 +67,10 @@ class Deque {
     //********************************************
     //**************Compare operators*************
     // bool operator<()
+    //********************************************
+    //*****************Usings*********************
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = 
     //********************************************
   };
   using iterator = common_iterator<false>;
