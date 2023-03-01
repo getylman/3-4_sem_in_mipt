@@ -87,9 +87,6 @@ class Deque {
   uint64_t fc_size_ = 0; // first chunk size
   uint64_t lc_size_ = 0; // last chunk size
 };
-//using Deque = std::deque<T>;
-
-
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //               DECLARATION
