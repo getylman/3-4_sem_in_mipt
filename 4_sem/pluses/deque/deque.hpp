@@ -11,11 +11,22 @@
 template <typename TempT, typename Alloc = std::allocator<TempT>>
 class Deque {
  protected:
-  using allocator_type = Alloc;
-  using Alloc_traits = std::allocator_traits<allocator_type>;
-  using Pntr = Alloc_traits::pointer;
-  using Pntr_Const = Alloc_traits::const_pointer;
   using value_type = TempT;
+  // type of inserted type
+  using allocator_type = Alloc;
+  // type of inserted allocator
+  using Type_alloc_type = typename std::allocator_traits<allocator_type>::template rebind<TempT>;
+  // allocator type of inner type
+  using Alloc_traits = std::allocator_traits<Type_alloc_type>;
+  // allocator_traits
+  using PrPtr = Alloc_traits::pointer;
+  // private allocator traits pointer
+  using PrPtr_const = Alloc_traits::const_pointer;
+  // private allocator traits constant pointer
+  using Chunk_alloc_type = typename Alloc_traits::template rebind<PrPtr>::other;
+  // allocator type of chunk
+  using Chunk_alloc_traits = std::allocator_traits<Chunk_alloc_type>;
+  // allocator trits for chunk
   using pointer = Alloc_traits::pointer;
   using const_pointer = Alloc_traits::const_pointer;
   using reference = Alloc_traits::reference;
@@ -24,12 +35,18 @@ class Deque {
 
  private:
   //====================Chunk=====================
+  template <uint64_t ChunkRank>
   class Chunk {
    private:
+    uint64_t size_;
+    pointer chunk_body_;
+    bool is_head_;
 
    public:
-    const uint64_t chunk_rank_;
-    uint64_t size_;
+    Chank(const bool& is_head) : is_head_(is_head), size_(0) {
+      /// TODO:  
+    }
+    // void set_in_chunk()
   };
   //==============================================
  public:
