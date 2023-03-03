@@ -3,24 +3,24 @@
 #include <vector>
 // 2b
 class Solution {
-  const int64_t kInf = 0xffffffff;
+  const uint64_t kInf = uint64_t(-1);
   struct Node {
-    std::vector<std::pair<int64_t, int64_t>> neighbours;
-    int64_t value = 0;
-    int64_t dist = kInf;
+    std::vector<std::pair<uint64_t, uint64_t>> neighbours;
+    uint64_t value = 0;
+    uint64_t dist = kInf;
     bool used = false;
 
    private:
-    const int64_t kInf = 0xffffffff;
+    const uint64_t kInf = uint64_t(-1);
   };
   std::vector<Node> adj_list_;
-  std::priority_queue<std::pair<int64_t, int64_t>,
-                      std::vector<std::pair<int64_t, int64_t>>,
-                      std::greater<std::pair<int64_t, int64_t>>>
+  std::priority_queue<std::pair<uint64_t, uint64_t>,
+                      std::vector<std::pair<uint64_t, uint64_t>>,
+                      std::greater<std::pair<uint64_t, uint64_t>>>
       heap_;
   void BuildAdjList(
       const size_t& vertexes,
-      const std::vector<std::pair<std::pair<int64_t, int64_t>, int64_t>>&
+      const std::vector<std::pair<std::pair<uint64_t, uint64_t>, uint64_t>>&
           edges) {
     adj_list_.resize(vertexes + 1);
     for (size_t i = 1; i <= vertexes; ++i) {
@@ -32,19 +32,19 @@ class Solution {
       adj_list_[i.first.second].neighbours.push_back({i.first.first, i.second});
     }
   }
-  static int64_t ExtractMin(
-      std::priority_queue<std::pair<int64_t, int64_t>,
-                          std::vector<std::pair<int64_t, int64_t>>,
-                          std::greater<std::pair<int64_t, int64_t>>>& heap) {
-    int64_t extracted_elem = heap.top().second;
+  static uint64_t ExtractMin(
+      std::priority_queue<std::pair<uint64_t, uint64_t>,
+                          std::vector<std::pair<uint64_t, uint64_t>>,
+                          std::greater<std::pair<uint64_t, uint64_t>>>& heap) {
+    uint64_t extracted_elem = heap.top().second;
     heap.pop();
     return extracted_elem;
   }
   static void Nothing(){};
-  void Dijkstra(const int64_t& start) {
+  void Dijkstra(const uint64_t& start) {
     adj_list_[start].dist = 0;
     heap_.push({0, start});
-    int64_t top_of_heap = 0;
+    uint64_t top_of_heap = 0;
     for (; !heap_.empty();) {
       top_of_heap = ExtractMin(heap_);
       if (!adj_list_[top_of_heap].used) {
@@ -63,10 +63,10 @@ class Solution {
  public:
   void Answer(
       const size_t& vertexes,
-      const std::vector<std::pair<std::pair<int64_t, int64_t>, int64_t>>&
+      const std::vector<std::pair<std::pair<uint64_t, uint64_t>, uint64_t>>&
           edges,
-      const std::vector<int64_t>& infected_vertexes,
-      const std::pair<int64_t, int64_t>& start_and_finsh) {
+      const std::vector<uint64_t>& infected_vertexes,
+      const std::pair<uint64_t, uint64_t>& start_and_finsh) {
     BuildAdjList(vertexes, edges);
     Dijkstra(start_and_finsh.second);
     for (const auto& i : infected_vertexes) {
@@ -84,16 +84,16 @@ int main() {
   size_t num_of_edges = 0;
   size_t num_of_infected = 0;
   std::cin >> vertexes >> num_of_edges >> num_of_infected;
-  std::vector<int64_t> infected_vertexes(num_of_infected);
+  std::vector<uint64_t> infected_vertexes(num_of_infected);
   for (auto& i : infected_vertexes) {
     std::cin >> i;
   }
-  std::vector<std::pair<std::pair<int64_t, int64_t>, int64_t>> edges(
+  std::vector<std::pair<std::pair<uint64_t, uint64_t>, uint64_t>> edges(
       num_of_edges);
   for (auto& i : edges) {
     std::cin >> i.first.first >> i.first.second >> i.second;
   }
-  std::pair<int64_t, int64_t> start_and_finish;
+  std::pair<uint64_t, uint64_t> start_and_finish;
   std::cin >> start_and_finish.first >> start_and_finish.second;
   Solution().Answer(vertexes, edges, infected_vertexes, start_and_finish);
 }
