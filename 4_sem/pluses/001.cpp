@@ -1,17 +1,15 @@
 #include <iostream>
-
-template <size_t N>
-struct A {
-  void f() { std::cout << N; }
-};
-
-template <size_t K>
-using B = A<K>;
-
-using C = B<1>;
-using D = B<2>;
+#include <memory>
 
 int main() {
-  C a;
-  a.f();
+  std::allocator<int> al;
+  int* a = std::allocator_traits<std::allocator<int>>::allocate(al, 10);
+  for (size_t i = 0; i < 10; ++i) {
+    std::allocator_traits<std::allocator<int>>::construct(al, a + i, i);
+  }
+  for (size_t i = 0; i < 10; ++i) {
+    std::cout << a[i] << ' ';
+    std::allocator_traits<std::allocator<int>>::destroy(al, a + i);
+  }
+  std::allocator_traits<std::allocator<int>>::deallocate(al, a, 10);
 }

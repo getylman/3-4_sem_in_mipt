@@ -15,7 +15,8 @@ class Deque {
   // type of inserted type
   using allocator_type = Alloc;
   // type of inserted allocator
-  using Type_alloc_type = typename std::allocator_traits<allocator_type>::template rebind<TempT>;
+  using Type_alloc_type =
+      typename std::allocator_traits<allocator_type>::template rebind<TempT>;
   // allocator type of inner type
   using Alloc_traits = std::allocator_traits<Type_alloc_type>;
   // allocator_traits
@@ -38,15 +39,63 @@ class Deque {
   template <uint64_t ChunkRank>
   class Chunk {
    private:
-    uint64_t size_;
-    pointer chunk_body_;
-    bool is_head_;
+    uint64_t chunk_size_ = 0;             // current size
+    int16_t changing_delta_ = -1;   // delta of changing the index
+    uint64_t boundary_wall_ = 0;    // the limit of increasing index
+    pointer chunk_body_ = nullptr;  // pointer of head
+    bool is_head_ = true;  // means is this chunk is head node or tail node
+    Type_alloc_type all_tp_;
 
    public:
-    Chank(const bool& is_head) : is_head_(is_head), size_(0) {
-      /// TODO:  
+    //****************Constructors***************
+    Chunk(const bool& is_head) : is_head_(is_head) {
+      try {
+        chunk_body = Alloc_traits::allocate(all_tp_, ChunkRank);
+      } catch (...) {
+        throw;  // if allocation of memory failed it will stop constructing
+                // and throw the exception of this situation
+      }
+      changing_delta_ = (is_head_) ? -1 : 1;
+      boundaty_wall_ = (is_head_) ? 0 : ChunkRank - 1;
+      chunk_size_ = (is_head_) ? ChunkRank - 1 : 0;
     }
-    // void set_in_chunk()
+    ~Chunk() {
+      Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    }
+    //*******************************************
+    //*****************Getters*******************
+    uint64_t get_chunk_size() const noexcept {
+      return (is_head_) ? boundaty_wall_ - chunk_size_ : chunk_size_;
+    } // <- how many cells are filled
+    bool chunk_empty() const noexcept { return get_chunk_size() == 0; }
+    bool is_ghunk_full() const noexcept { return boundaty_wall_ == chunk_size_; }
+    //*******************************************
+    //*****************Setters*******************
+    void set_in_chunk(const value_type& value) {
+      try {
+        Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, value);
+      } catch (...) {
+        throw; // if construction of object failed it will stop constructing
+               // and throw the exception of this situation
+      }
+      chunk_size_ += changing_delta_;
+    }
+    void set_in_chunk(value_type&& value) {
+      try {
+        Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, std::move_if_noexcept(value));
+      } catch (...) {
+        throw; // if construction of object failed it will stop constructing
+               // and throw the exception of this situation
+      }
+      chunk_size_ += changing_delta_;
+    }
+    //*******************************************
+    //*****************Erasers*******************
+    void pop_from_chunk() {
+      Alloc_traits::destroy(all_tp_, chunk_body_ + chunk_size_ - 1);
+      chunk_size_ -= chunk_delta_;
+    }
+    //*******************************************
   };
   //==============================================
  public:
@@ -99,23 +148,24 @@ class Deque {
     using conditional_ptr = std::conditional_t<IsConst, const pointer, pointer>;
     using conditional_ref =
         std::conditional_t<IsConst, const reference, reference>;
-    conditional_ptr ptr;
+    conditional_ptr ptr_;
+    size_t index_;
     // ещё надо хранить указатель к каком именно чанке находимся
     //********************************************
    public:
     //****************Memory operators************
     conditional_ref operator*() const noexcept {
-      return *ptr;
+      return *ptr_;
     }
     conditional_ptr operator->() const noexcept {
-      return ptr;
+      return ptr_;
     }
     template <typename TempT1>
     TempT1& operator->*(TempT1 TempT::*another_ptr) const noexcept {
-      return (*ptr).*another_ptr;
+      return (*ptr_).*another_ptr;
     }
     conditional_ref operator[](const int64_t& idx) const noexcept {
-      return *(ptr + idx);
+      return *(ptr_ + idx);
     }
     //********************************************
     //************Aithmetic operators*************
@@ -133,7 +183,9 @@ class Deque {
         const typename Deque<TempT, Alloc>::common_iterator<IsConst>& iter_left,
         const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
             iter_right) noexcept {
-      return iter_left.ptr < iter_right.ptr;
+      return (iter_left.index_ == iter_right.index_)
+                 ? iter_left.ptr_ < iter_right.ptr_
+                 : iter_left.index_ < iter_right.index_;
       // тут надо проверять находимся ли мы в одном чанке или нет
     }
     //********************************************
@@ -141,11 +193,8 @@ class Deque {
   //**************Iterator usings*****************
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
-  template <bool IsConst>
-  using common_reverse_iterator =
-      std::reverse_iterator<common_iterator<IsConst>>;
-  using reverse_iterator = common_reverse_iterator<true>;
-  using const_reverse_iterator = common_reverse_iterator<false>;
+  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
+  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
   //**********************************************
   //==============================================
  private:
