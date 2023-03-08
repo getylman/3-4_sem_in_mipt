@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 02.03.2023
+ * @date 08.03.2023
  */
 #pragma once
 #include <iterator>
@@ -15,8 +15,8 @@ class Deque {
   // type of inserted type
   using allocator_type = Alloc;
   // type of inserted allocator
-  using Type_alloc_type =
-      typename std::allocator_traits<allocator_type>::template rebind<TempT>;
+  using Type_alloc_type = typename std::allocator_traits<
+      allocator_type>::template rebind<TempT>::other;
   // allocator type of inner type
   using Alloc_traits = std::allocator_traits<Type_alloc_type>;
   // allocator_traits
@@ -24,10 +24,6 @@ class Deque {
   // private allocator traits pointer
   using PrPtr_const = Alloc_traits::const_pointer;
   // private allocator traits constant pointer
-  using Chunk_alloc_type = typename Alloc_traits::template rebind<PrPtr>::other;
-  // allocator type of chunk
-  using Chunk_alloc_traits = std::allocator_traits<Chunk_alloc_type>;
-  // allocator trits for chunk
   using pointer = Alloc_traits::pointer;
   using const_pointer = Alloc_traits::const_pointer;
   using reference = Alloc_traits::reference;
@@ -35,16 +31,18 @@ class Deque {
   using difference_type = ptrdiff_t;
 
  private:
+  const uint64_t kChunkSize = 512;  // size of chunks
+                                    // I cannot explane why 512
   //====================Chunk=====================
   template <uint64_t ChunkRank>
   class Chunk {
    private:
-    uint64_t chunk_size_ = 0;             // current size
+    uint64_t chunk_size_ = 0;       // current size
     int16_t changing_delta_ = -1;   // delta of changing the index
     uint64_t boundary_wall_ = 0;    // the limit of increasing index
     pointer chunk_body_ = nullptr;  // pointer of head
-    bool is_head_ = true;  // means is this chunk is head node or tail node
-    Type_alloc_type all_tp_;
+    bool is_head_ = true;     // means is this chunk is head node or tail node
+    Type_alloc_type all_tp_;  // object of our allocator
 
    public:
     //****************Constructors***************
@@ -56,7 +54,7 @@ class Deque {
                 // and throw the exception of this situation
       }
       changing_delta_ = (is_head_) ? -1 : 1;
-      boundaty_wall_ = (is_head_) ? 0 : ChunkRank - 1;
+      boundary_wall_ = (is_head_) ? 0 : ChunkRank - 1;
       chunk_size_ = (is_head_) ? ChunkRank - 1 : 0;
     }
     ~Chunk() {
@@ -65,39 +63,53 @@ class Deque {
     //*******************************************
     //*****************Getters*******************
     uint64_t get_chunk_size() const noexcept {
-      return (is_head_) ? boundaty_wall_ - chunk_size_ : chunk_size_;
-    } // <- how many cells are filled
-    bool chunk_empty() const noexcept { return get_chunk_size() == 0; }
-    bool is_ghunk_full() const noexcept { return boundaty_wall_ == chunk_size_; }
+      return (is_head_) ? boundary_wall_ - chunk_size_ : chunk_size_;
+    }  // <- how many cells are filled
+    bool chunk_empty() const noexcept {
+      return get_chunk_size() == 0;
+    }
+    bool is_ghunk_full() const noexcept {
+      return boundary_wall_ == chunk_size_;
+    }
     //*******************************************
     //*****************Setters*******************
     void set_in_chunk(const value_type& value) {
       try {
         Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, value);
       } catch (...) {
-        throw; // if construction of object failed it will stop constructing
-               // and throw the exception of this situation
+        throw;  // if construction of object failed it will stop constructing
+                // and throw the exception of this situation
       }
       chunk_size_ += changing_delta_;
     }
     void set_in_chunk(value_type&& value) {
       try {
-        Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, std::move_if_noexcept(value));
+        Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_,
+                                std::move_if_noexcept(value));
       } catch (...) {
-        throw; // if construction of object failed it will stop constructing
-               // and throw the exception of this situation
+        throw;  // if construction of object failed it will stop constructing
+                // and throw the exception of this situation
       }
       chunk_size_ += changing_delta_;
     }
     //*******************************************
     //*****************Erasers*******************
-    void pop_from_chunk() {
+    void pop_from_chunk() noexcept {
       Alloc_traits::destroy(all_tp_, chunk_body_ + chunk_size_ - 1);
+      // if chunk was empty it will be UB
       chunk_size_ -= chunk_delta_;
     }
     //*******************************************
   };
   //==============================================
+ protected:
+  using Chunk_alloc_type =
+      typename Alloc_traits::template rebind<Chunk<kChunkSize>>::other;
+  // allocator type of chunk
+  using Chunk_alloc_traits = std::allocator_traits<Chunk_alloc_type>;
+  // allocator trits for chunk
+  using Chunk_pointer = Chunk_alloc_traits::pointer;
+  // pointer for chunks
  public:
   //=================Constructors=================
   Deque();  // check https://habr.com/ru/post/505632/
@@ -150,7 +162,6 @@ class Deque {
         std::conditional_t<IsConst, const reference, reference>;
     conditional_ptr ptr_;
     size_t index_;
-    // ещё надо хранить указатель к каком именно чанке находимся
     //********************************************
    public:
     //****************Memory operators************
@@ -177,6 +188,17 @@ class Deque {
     common_iterator<IsConst>& operator--() noexcept;
     common_iterator<IsConst>& operator++(int) noexcept;
     common_iterator<IsConst>& operator--(int) noexcept;
+    friend
+        typename Deque<TempT, Alloc>::common_iterator<IsConst>::difference_type
+        operator-(
+            const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
+            const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
+                it2) noexcept {
+      return (it1.index_ == it2.index_)
+                 ? it2.ptr_ - it2.ptr_
+                 : it2.ptr_ + kChunkSize - it1.ptr_ +
+                       kChunkSize * (it2.index_ - it1.index_ - 1);
+    }
     //********************************************
     //**************Compare operators*************
     friend bool operator<(
@@ -198,21 +220,17 @@ class Deque {
   //**********************************************
   //==============================================
  private:
-  const uint64_t kChunkSize = 0;  // size of chunks
   uint64_t total_size_ = 0;       // size of in full container
-  uint64_t fc_size_ = 0;          // first chunk size
-  uint64_t lc_size_ = 0;          // last chunk size
+  uint64_t num_of_chunks_ = 0;    // how many chunks have a container
+  Chunk_pointer body_ = nullptr;  // pointer of full deque. the end is just
+                                  // body plus size
+  Chunk_pointer head_chunk_ = nullptr;  // pointer of current head
+  Chunk_pointer tail_chunk_ = nullptr;  // pointer of current tail
 };
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-//           NO MEMBER DEFINITION
+//    NO MEMBER DEFINITION AND DECLARATION
 //=================ITERATOR==================
-//***********Arithmetic operators************
-template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
-typename Deque<TempT, Alloc>::common_iterator<IsConst>::difference_type
-operator-(const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it1,
-          const typename Deque<TempT, Alloc>::common_iterator<IsConst>& it2);
-//*******************************************
 //*************Compare operators*************
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
 bool operator>(
