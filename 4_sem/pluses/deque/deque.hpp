@@ -219,6 +219,21 @@ class Deque {
   using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
   //**********************************************
   //==============================================
+  //================Iterator methods==============
+  iterator begin() noexcept;
+  const_iterator begin() const noexcept;
+  const_iterator cbegin() const noexcept;
+  iterator end() noexcept;
+  const_iterator end() const noexcept;
+  const_iterator cend() const noexcept;
+  reverse_iterator rbegin() noexcept;
+  const_reverse_iterator rbegin() const noexcept;
+  const_reverse_iterator crbegin() const noexcept;
+  reverse_iterator rend() noexcept;
+  const_reverse_iterator rend() const noexcept;
+  const_reverse_iterator crend() const noexcept;
+  //==============================================
+
  private:
   uint64_t total_size_ = 0;       // size of in full container
   uint64_t num_of_chunks_ = 0;    // how many chunks have a container
