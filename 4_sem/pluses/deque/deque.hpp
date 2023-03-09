@@ -165,6 +165,9 @@ class Deque {
     //********************************************
    public:
     //****************Memory operators************
+    operator conditional_ptr() {
+      return &**this;
+    }  // operator c-style cast of iterator
     conditional_ref operator*() const noexcept {
       return *ptr_;
     }
@@ -288,5 +291,8 @@ bool operator!=(
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //               DECLARATION
+
+//================Iterator methods===========
+//===========================================
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
