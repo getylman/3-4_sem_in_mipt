@@ -1,8 +1,14 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 08.03.2023
+ * @date 11.03.2023
  */
+
+/*
+ * YA ZAPRESHYAYU MENYAT RANK CHUNKA
+
+*/
+
 #pragma once
 #include <iterator>
 #include <memory>
@@ -32,7 +38,7 @@ class Deque {
 
  public:
   //===================Iterator===================
-  template <bool IsConst, typename IterT>
+  template <bool IsConst>
   struct common_iterator;
   //==============================================
 
@@ -42,6 +48,10 @@ class Deque {
   static constexpr const uint64_t set_chunk_rank() noexcept {
     const uint64_t kChunkRank = 512;
     return kChunkRank;
+  }  // function to set a rank for chunk
+  static constexpr const uint64_t set_chunk_rank(
+      const uint64_t& rank) noexcept {
+    return rank;
   }
   //====================Chunk=====================
   template <uint64_t ChunkRank = set_chunk_rank()>
@@ -59,18 +69,17 @@ class Deque {
   //=================Constructors=================
   Deque();  // check https://habr.com/ru/post/505632/
   explicit Deque(const size_t& count, const Alloc& alloc);
-  template <typename AnotherAlloc = std::allocator<TempT>>
   explicit Deque(const Alloc& alloc);
-  template <typename AnotherAlloc = std::allocator<TempT>>
   explicit Deque(const size_t& count, const TempT& value,
-                 const AnoterAlloc& alloc = AnoterAlloc());
+                 const Alloc& alloc = Alloc());
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque(const Deque<TempT, AnotherAlloc>& deq);
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque(Deque<TempT, AnotherAlloc>&& deq);
   ~Deque();
   template <typename AnotherAlloc = std::allocator<TempT>>
-  Deque<TempT, AnotherAlloc>& operator=(const Deque<TempT, AnotherAlloc>& deq) &;
+  Deque<TempT, AnotherAlloc>& operator=(
+      const Deque<TempT, AnotherAlloc>& deq) &;
   // will called only for lvalue
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque<TempT, AnotherAlloc>& operator=(Deque<TempT, AnotherAlloc>&& deq) &&;
@@ -101,14 +110,13 @@ class Deque {
   //==================ITERATOR====================
 
   // отдельный итератор на чанк и чанкходер через юзинги
-
+  // верхнее не актуально
   //**************Iterator usings*****************
-  using iterator = common_iterator<false, TempT>;
-  using const_iterator = common_iterator<true, TempT>;
-  using reverse_iterator = std::reverse_iterator<common_iterator<false, TempT>>;
-  using const_reverse_iterator = std::reverse_iterator<common_iterator<
-      true, TempT>>;  /// TODO: вместо TempT вставить норм типы а так я оставил
-                      /// как затычку чтоб исправить CE
+  using iterator = common_iterator<false>;
+  using const_iterator = common_iterator<true>;
+  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
+  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
+
   //**********************************************
   //==============================================
   //================Iterator methods==============
@@ -146,13 +154,13 @@ class Deque {
 //    NO MEMBER DEFINITION AND DECLARATION
 //=================ITERATOR==================
 template <typename TempT, typename Alloc>
-template <bool IsConst, typename IterT>
+template <bool IsConst>
 struct Deque<TempT, Alloc>::common_iterator {
   //***************Public usings****************
   using iterator_category = std::random_access_iterator_tag;
-  using value_type = IterT;
-  using pointer = IterT*;
-  using reference = IterT&;
+  using value_type = TempT;
+  using pointer = TempT*;
+  using reference = TempT&;
   using difference_type = ptrdiff_t;
   //********************************************
  private:
@@ -160,19 +168,44 @@ struct Deque<TempT, Alloc>::common_iterator {
   using conditional_ptr = std::conditional_t<IsConst, const pointer, pointer>;
   using conditional_ref =
       std::conditional_t<IsConst, const reference, reference>;
-  conditional_ptr ptr_;  // pointer of current node
-  size_t index_;         // index of current nod in container
+  // size_t index_;                // index of current nod in container
+  conditional_ptr ptr_ = nullptr;         // pointer of current node
+  conditional_ptr top_ptr_ = nullptr;     // pointer of upper bound
+  conditional_ptr bottom_ptr_ = nullptr;  // pointer of lower bound
+  Deque<TempT, Alloc>::Chunk<>* cur_chunk_ptr_ = nullptr;
+  // pointer of current chunk
 
   //********************************************
  public:
   //****************Constructors****************
-  common_iterator<IsConst, IterT>() noexcept : ptr_(nullptr), index_(0) {
+  common_iterator() noexcept {
   }
-  ~common_iterator<IsConst, IterT>() {
-    ptr_ = nullptr;
-    index_ = 0;
+  common_iterator(const pointer& ptr,
+                  const Deque<TempT, Alloc>::Chunk<>*& curnk_ptr) noexcept
+      : ptr_(ptr),
+        top_ptr_(curnk_ptr->chunk_body_),
+        bottom_ptr_(curnk_ptr->chunk_body_ + curnk_ptr->get_chunk_rank()),
+        cur_chunk_ptr_(curnk_ptr) {
+  }  // constructor from two pointers
+  template <bool IsConstTmp>
+  common_iterator(const common_iterator<IsConstTmp>& iter) noexcept
+      : ptr_(iter.ptr_),
+        top_ptr_(iter.top_ptr_),
+        bottom_ptr_(iter.bottom_ptr_),
+        cur_chunk_ptr_(iter.cur_chunk_ptr_) {
+    static_assert(std::is_same<decltype(*ptr_), decltype(*(iter.ptr_))>::value);
+    // make CE if value types of iterators are not same
+  }  // copy costructor
+  ~common_iterator() {
   }
-  common_iterator<true, IterT>& operator=(const common_iterator<>)
+  template <bool IsConstTmp>
+  common_iterator<IsConst>& operator=(const common_iterator<IsConstTmp>& iter) {
+    ptr_ = iter.ptr_;
+    cur_chunk_ptr_ = iter.cur_chunk_ptr_;
+    top_ptr_ = iter.top_ptr_;
+    bottom_ptr_ = iter.bottom_ptr_;
+    return *this;
+  }
   //********************************************
   //****************Memory operators************
   operator conditional_ptr() {
@@ -184,70 +217,97 @@ struct Deque<TempT, Alloc>::common_iterator {
   conditional_ptr operator->() const noexcept {
     return ptr_;
   }
-  template <typename IterT1>
-  IterT& operator->*(IterT1 IterT::*another_ptr) const noexcept {
-    return (*ptr_).*another_ptr;
-  }
+  // template <typename IterT1>
+  // IterT& operator->*(IterT1 IterT::*another_ptr) const noexcept {
+  //   return (*ptr_).*another_ptr;
+  // }
+  // commented to the best times
   conditional_ref operator[](const int64_t& idx) const noexcept {
     return *(*this + idx);
   }
+  void change_chunk(Chunk<> new_chunk) noexcept {
+    cur_chunk_ptr_ = new_chunk;
+    top_ptr_ = new_chunk.chunk_body_;
+    bottom_ptr_ =
+        new_chunk.chunk_body_ + static_cast<difference_type>(set_chunk_rank());
+  }
   //********************************************
   //************Aithmetic operators*************
-  common_iterator<IsConst, IterT>& operator+=(const int64_t& delta) noexcept;
-  common_iterator<IsConst, IterT>& operator-=(const int64_t& delta) noexcept;
-  common_iterator<IsConst, IterT> operator+(const int64_t& delta) noexcept;
-  common_iterator<IsConst, IterT> operator-(const int64_t& delta) noexcept;
-  common_iterator<IsConst, IterT>& operator++() noexcept;
-  common_iterator<IsConst, IterT>& operator--() noexcept;
-  common_iterator<IsConst, IterT>& operator++(int) noexcept;
-  common_iterator<IsConst, IterT>& operator--(int) noexcept;
-  friend  // блять снова переделывать после добавления второго шаблонного
-          // аргумента
-      typename Deque<TempT, Alloc>::common_iterator<IsConst,
-                                                    IterT>::difference_type
-      operator-(
-          const typename Deque<TempT, Alloc>::common_iterator<IsConst, IterT>&
-              it1,
-          const typename Deque<TempT, Alloc>::common_iterator<IsConst, IterT>&
-              it2) noexcept {
-    return (it1.index_ == it2.index_)
-               ? it2.ptr_ - it2.ptr_
-               : it2.ptr_ - it1.ptr_ * (it2.index_ - it1.index_ -
-                                        1);  // надо переделать тк передумал над
-                                             // концепцией итератора
-    // тут совсем не верная логика надо сделать отдельную специализацию под
-    // итератор типа и отдельна для чанка
+  common_iterator<IsConst>& operator+=(const int64_t& delta) noexcept {
+    const int64_t distance = static_cast<int64_t>(ptr_ - top_ptr_) + delta;
+    if (distance >= 0 and distance < static_cast<int64_t>(set_chunk_rank())) {
+      ptr_ += distance;
+    } else {
+      const int64_t chunk_distance =
+          (distance > 0)
+              ? distance / static_cast<int64_t>(set_chunk_rank())
+              : -((-distance - 1) / static_cast<int64_t>(set_chunk_rank())) - 1;
+      change_chunk(cur_chunk_ptr_ + chunk_distance);
+      ptr_ = top_ptr_ + distance -
+             chunk_distance * static_cast<int64_t>(set_chunk_rank());
+    }
+    return *this;
+  }
+  common_iterator<IsConst>& operator-=(const int64_t& delta) noexcept {
+    return *this += -delta;
+  }
+  common_iterator<IsConst> operator+(const int64_t& delta) noexcept {
+    common_iterator<IsConst> tmp = *this;
+    tmp += delta;
+    return tmp;
+  }
+  common_iterator<IsConst> operator-(const int64_t& delta) noexcept {
+    common_iterator<IsConst> tmp = *this;
+    tmp -= delta;
+    return tmp;
+  }
+  common_iterator<IsConst>& operator++() noexcept {
+    return *this += 1;
+  }
+  common_iterator<IsConst>& operator--() noexcept {
+    return *this -= 1;
+  }
+  common_iterator<IsConst> operator++(int) noexcept {
+    return ++common_iterator<IsConst>(*this);
+  }
+  common_iterator<IsConst> operator--(int) noexcept {
+    return --common_iterator<IsConst>(*this);
+  }
+
+  difference_type operator-(const common_iterator<IsConst>& iter) noexcept {
+    return static_cast<difference_type>(set_chunk_rank()) *
+           static_cast<difference_type>(
+               cur_chunk_ptr_ - iter.cur_chunk_ptr_ -
+               static_cast<int64_t>(cur_chunk_ptr_ != nullptr) +
+               (ptr_ - top_ptr_) + (iter.bottom_ptr_ - iter.ptr_));
   }
   //********************************************
   //**************Compare operators*************
-  friend bool operator<(
-      const typename Deque<TempT, Alloc>::common_iterator<IsConst, IterT>&
-          iter_left,
-      const typename Deque<TempT, Alloc>::common_iterator<IsConst, IterT>&
-          iter_right) noexcept {
-    return (iter_left.index_ == iter_right.index_)
-               ? iter_left.ptr_ < iter_right.ptr_
-               : iter_left.index_ < iter_right.index_;
+  friend bool operator<(const common_iterator<IsConst>& it1,
+                        const common_iterator<IsConst>& it2) noexcept {
+    return (it1.cur_chunk_ptr_ == it2.cur_chunk_ptr_)
+               ? it1.ptr_ < it2.ptr_
+               : it1.cur_chunk_ptr_ < it2.cur_chunk_ptr_;
     // тут надо проверять находимся ли мы в одном чанке или нет
   }
   //********************************************
 };
 
 //************Aithmetic operators************
-// template <typename TempT, bool IsConst, typename IterT,
-//           typename Alloc =
-//               std::allocator<TempT> >>
-//               typename Deque<TempT, Alloc>::common_iterator<IsConst, IterT>
-//               operator+(const int64_t& delta,
-//                         const typename Deque<TempT, Alloc>::common_iterator<
-//                             IsConst, IterT>& iter) noexcept {
-//   return iter + delta;
-// }
-// template <typename TempT, typename Alloc = std::allocator<TempT>, bool
-// IsConst> typename Deque<TempT, Alloc>::common_iterator<IsConst> operator-(
-//     const int64_t& delta,
-//     const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
-//         iter) noexcept;
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+typename Deque<TempT, Alloc>::common_iterator<IsConst> operator+(
+    const int64_t& delta,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
+        iter) noexcept {
+  return iter + delta;
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
+typename Deque<TempT, Alloc>::common_iterator<IsConst> operator-(
+    const int64_t& delta,
+    const typename Deque<TempT, Alloc>::common_iterator<IsConst>&
+        iter) noexcept {
+  return iter - delta;
+}
 //*******************************************
 //*************Compare operators*************
 template <typename TempT, typename Alloc = std::allocator<TempT>, bool IsConst>
@@ -293,10 +353,10 @@ template <typename TempT, typename Alloc>
 template <uint64_t ChunkRank>
 class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
  private:
-  uint64_t chunk_size_ = 0;       // current size
-  int16_t changing_delta_ = -1;   // delta of changing the index
-  uint64_t boundary_wall_ = 0;    // the limit of increasing index
-  pointer chunk_body_ = nullptr;  // pointer of head
+  uint64_t chunk_size_ = 0;      // current size
+  int16_t changing_delta_ = -1;  // delta of changing the index
+  uint64_t boundary_wall_ = 0;   // the limit of increasing index
+  Deque<TempT, Alloc>::pointer chunk_body_ = nullptr;  // pointer of head
   bool is_head_ = true;     // means is this chunk is head node or tail node
   Type_alloc_type all_tp_;  // object of our allocator
 
@@ -330,6 +390,9 @@ class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
   }
   bool is_ghunk_full() const noexcept {
     return boundary_wall_ == chunk_size_;
+  }
+  constexpr const uint64_t get_chunk_rank() const noexcept {
+    return ChunkRank;
   }
   //*******************************************
   //*****************Setters*******************
