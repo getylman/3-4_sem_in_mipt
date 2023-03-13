@@ -1,12 +1,12 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 11.03.2023
+ * @date 13.03.2023
  */
 
 /*
- * YA ZAPRESHYAYU MENYAT RANK CHUNKA
-
+ * Я ЗАПРЕЩАЮ КОМУ ЛИБО МЕНЬ РАНГ ДЕКА 
+ * ПРОБЛЕМЫ НА ВАЩУ СОВЕСТЬ
 */
 
 #pragma once
@@ -40,6 +40,12 @@ class Deque {
   //===================Iterator===================
   template <bool IsConst>
   struct common_iterator;
+  //**************Iterator usings*****************
+  using iterator = common_iterator<false>;
+  using const_iterator = common_iterator<true>;
+  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
+  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
+  //**********************************************
   //==============================================
 
  private:
@@ -106,18 +112,6 @@ class Deque {
   void push_front(const TempT& elem);
   void push_front(TempT&& elem);
   void pop_front();
-  //==============================================
-  //==================ITERATOR====================
-
-  // отдельный итератор на чанк и чанкходер через юзинги
-  // верхнее не актуально
-  //**************Iterator usings*****************
-  using iterator = common_iterator<false>;
-  using const_iterator = common_iterator<true>;
-  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
-  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
-
-  //**********************************************
   //==============================================
   //================Iterator methods==============
   iterator begin() noexcept;
