@@ -5,9 +5,9 @@
  */
 
 /*
- * Я ЗАПРЕЩАЮ КОМУ ЛИБО МЕНЬ РАНГ ДЕКА 
+ * Я ЗАПРЕЩАЮ КОМУ ЛИБО МЕНЬ РАНГ ДЕКА
  * ПРОБЛЕМЫ НА ВАЩУ СОВЕСТЬ
-*/
+ */
 
 #pragma once
 #include <iterator>
@@ -62,6 +62,12 @@ class Deque {
   //====================Chunk=====================
   template <uint64_t ChunkRank = set_chunk_rank()>
   class Chunk;
+  //==============================================
+  //================Memory Controller=============
+  // struct MemoryController : public Type_alloc_type {
+  //
+  // };
+  // in moment I changed my mind
   //==============================================
  protected:
   using Chunk_alloc_type =
@@ -166,7 +172,7 @@ struct Deque<TempT, Alloc>::common_iterator {
   conditional_ptr ptr_ = nullptr;         // pointer of current node
   conditional_ptr top_ptr_ = nullptr;     // pointer of upper bound
   conditional_ptr bottom_ptr_ = nullptr;  // pointer of lower bound
-  Deque<TempT, Alloc>::Chunk<>* cur_chunk_ptr_ = nullptr;
+  Chunk_pointer cur_chunk_ptr_ = nullptr;
   // pointer of current chunk
 
   //********************************************
@@ -174,8 +180,7 @@ struct Deque<TempT, Alloc>::common_iterator {
   //****************Constructors****************
   common_iterator() noexcept {
   }
-  common_iterator(const pointer& ptr,
-                  const Deque<TempT, Alloc>::Chunk<>*& curnk_ptr) noexcept
+  common_iterator(const pointer& ptr, const Chunk_pointer& curnk_ptr) noexcept
       : ptr_(ptr),
         top_ptr_(curnk_ptr->chunk_body_),
         bottom_ptr_(curnk_ptr->chunk_body_ + curnk_ptr->get_chunk_rank()),
@@ -345,46 +350,77 @@ bool operator!=(
 //==================Chunk====================
 template <typename TempT, typename Alloc>
 template <uint64_t ChunkRank>
-class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
+class Deque<TempT, Alloc>::Chunk {
  private:
-  uint64_t chunk_size_ = 0;      // current size
-  int16_t changing_delta_ = -1;  // delta of changing the index
-  uint64_t boundary_wall_ = 0;   // the limit of increasing index
-  Deque<TempT, Alloc>::pointer chunk_body_ = nullptr;  // pointer of head
-  bool is_head_ = true;     // means is this chunk is head node or tail node
+  uint64_t chunk_size_ = 0;            // current size
+  int16_t l_changing_delta_ = -1;      // delta for moving to left
+  int16_t r_changing_delta_ = 1;       // delta for moving to right
+  pointer l_chunk_confine_ = nullptr;  // left confine
+  pointer r_chunk_confine_ = nullptr;  // right confine
+  pointer chunk_body_ = nullptr;       // pointer of head
+  pointer chunk_head_ = nullptr;       // head end of using chunk
+  pointer chunk_tail_ = nullptr;       // tail end of using chunk
+  // bool is_head_ = true;     // means is this chunk is head node or tail node
   Type_alloc_type all_tp_;  // object of our allocator
 
  public:
   //****************Constructors***************
-  Chunk(const bool& is_head) noexcept(std::is_nothrow_constructible_v<TempT>)
-      : is_head_(is_head) {
+  // noexcept(std::is_nothrow_constructible_v<TempT>)
+  Chunk(const bool& is_head) noexcept {
     try {
       chunk_body_ = Alloc_traits::allocate(all_tp_, ChunkRank);
     } catch (...) {
       throw;  // if allocation of memory failed it will stop constructing
               // and throw the exception of this situation
     }
-    changing_delta_ = (is_head_) ? -1 : 1;
-    boundary_wall_ = (is_head_) ? 0 : ChunkRank - 1;
-    chunk_size_ = (is_head_) ? ChunkRank - 1 : 0;
+    l_chunk_confine_ = chunk_body_;
+    r_chunk_confine_ = chunk_body_ + ChunkRank - 1;
+    chunk_tail_ = chunk_head_ = (is_head) ? r_chunk_confine_ : l_chunk_confine_;
+    // I hope that you remember the construction which one you used
   }
   template <typename AnotherAlloc>
-  Chunk(const typename Deque<TempT, AnotherAlloc>::Chunk<>& chnk) {
+  Chunk(const typename Deque<TempT, AnotherAlloc>::Chunk<>& chnk) noexcept(
+      std::is_nothrow_constructible_v<TempT>) {
+    try {
+      chunk_body_ = Alloc_traits::allocate(all_tp_, ChunkRank);
+    } catch (...) {
+      throw;  // if allocation of memory failed it will stop constructing
+              // and throw the exception of this situation
+    }
+    chunk_size_ = chnk.chunk_size_;
+    chunk_head_ = chunk_body_ + (chnk.chunk_head_ - chnk.chunk_body_);
+    chunk_tail_ = chunk_body_ + (chnk.chunk_tail_ - chnk.chunk_body_);
+    l_chunk_confine_ = chunk_body_;
+    r_chunk_confine_ = chunk_body_ + ChunkRank - 1;
+    uint64_t idx = static_cast<uint64_t>(chunk_head_ - chunk_body_);
+    try {
+      for (; idx <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++idx) {
+        Alloc_traits::construct(all_tp_, chunk_body_ + idx,
+                                chnk.chunk_body_ + idx);
+      }
+    } catch (...) {
+      for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
+           i < idx; ++i) {
+        Alloc_traits::destroy(all_tp_, chunk_body_ + i);
+      }
+      Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    }
   }
   ~Chunk() {
     Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    // я не дописал надо лучше
   }
   //*******************************************
   //*****************Getters*******************
-  uint64_t get_chunk_size() const noexcept {
-    return (is_head_) ? boundary_wall_ - chunk_size_ : chunk_size_;
-  }  // <- how many cells are filled
-  bool chunk_empty() const noexcept {
-    return get_chunk_size() == 0;
-  }
-  bool is_ghunk_full() const noexcept {
-    return boundary_wall_ == chunk_size_;
-  }
+  // uint64_t get_chunk_size() const noexcept {
+  //   return (is_head_) ? boundary_wall_ - chunk_size_ : chunk_size_;
+  // }  // <- how many cells are filled
+  // bool chunk_empty() const noexcept {
+  //   return get_chunk_size() == 0;
+  // }
+  // bool is_ghunk_full() const noexcept {
+  //   return boundary_wall_ == chunk_size_;
+  // }
   constexpr const uint64_t get_chunk_rank() const noexcept {
     return ChunkRank;
   }
@@ -397,7 +433,7 @@ class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
       throw;  // if construction of object failed it will stop constructing
               // and throw the exception of this situation
     }
-    chunk_size_ += changing_delta_;
+    // chunk_size_ += changing_delta_;
   }
   void set_in_chunk(value_type&& value) {
     try {
@@ -407,14 +443,14 @@ class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
       throw;  // if construction of object failed it will stop constructing
               // and throw the exception of this situation
     }
-    chunk_size_ += changing_delta_;
+    // chunk_size_ += changing_delta_;
   }
   //*******************************************
   //*****************Erasers*******************
   void pop_from_chunk() noexcept {
     Alloc_traits::destroy(all_tp_, chunk_body_ + chunk_size_ - 1);
     // if chunk was empty it will be UB
-    chunk_size_ -= changing_delta_;
+    // chunk_size_ -= changing_delta_;
   }
   //*******************************************
 };
@@ -423,8 +459,5 @@ class Deque<TempT, Alloc>::Chunk : public Type_alloc_type {
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //               DECLARATION
-
-//================Iterator methods===========
-//===========================================
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
