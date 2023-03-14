@@ -161,7 +161,7 @@ struct Deque<TempT, Alloc>::common_iterator {
   using value_type = TempT;
   using pointer = TempT*;
   using reference = TempT&;
-  using difference_type = ptrdiff_t;
+  using difference_type = int64_t;  // ptrdiff_t;
   //********************************************
  private:
   //**************Private usings****************
@@ -404,6 +404,7 @@ class Deque<TempT, Alloc>::Chunk {
         Alloc_traits::destroy(all_tp_, chunk_body_ + i);
       }
       Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+      throw;
     }
   }
   ~Chunk() {
@@ -412,29 +413,63 @@ class Deque<TempT, Alloc>::Chunk {
   }
   //*******************************************
   //*****************Getters*******************
-  // uint64_t get_chunk_size() const noexcept {
-  //   return (is_head_) ? boundary_wall_ - chunk_size_ : chunk_size_;
-  // }  // <- how many cells are filled
-  // bool chunk_empty() const noexcept {
-  //   return get_chunk_size() == 0;
-  // }
-  // bool is_ghunk_full() const noexcept {
-  //   return boundary_wall_ == chunk_size_;
-  // }
+  uint64_t get_chunk_size() const noexcept {
+    return chunk_size_;
+  }  // <- how many cells are filled
+  bool chunk_empty() const noexcept {
+    return get_chunk_size() == 0;
+  }
   constexpr const uint64_t get_chunk_rank() const noexcept {
     return ChunkRank;
   }
   //*******************************************
   //*****************Setters*******************
-  void set_in_chunk(const value_type& value) {
+  void left_set_chunk(const value_type& value) noexcept(
+      std::is_nothrow_constructible_v<TempT>) {
+    if (chunk_size_ != 0) {
+      chunk_head_ += l_changing_delta_;
+    }
     try {
-      Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, value);
+      Alloc_traits::construct(all_tp_, chunk_head_, value);
     } catch (...) {
+      if (chunk_size_ != 0) {
+        chunk_head_ -= l_changing_delta_;
+      }
       throw;  // if construction of object failed it will stop constructing
               // and throw the exception of this situation
     }
-    // chunk_size_ += changing_delta_;
+    ++chunk_size_;
+    // проверка на то что можем ли закидывать в чанк или нет 
+    // или же там переход на следующий чанк это все будет или уже
+    // реализовано выше уровнем абстракции
   }
+  void right_set_chunk(const value_type& value) noexcept(
+      std::is_nothrow_constructible_v<TempT>) {
+    if (chunk_size_ != 0) {
+      chunk_tail_ += r_changing_delta_;
+    }
+    try {
+      Alloc_traits::construct(all_tp_, chunk_tail_, value);
+    } catch (...) {
+      if (chunk_size_ != 0) {
+        chunk_tail_ -= r_changing_delta_;
+      }
+      throw;  // if construction of object failed it will stop constructing
+              // and throw the exception of this situation
+    }
+    ++chunk_size_;
+    // проверка на то что можем ли закидывать в чанк или нет 
+    // или же там переход на следующий чанк это все будет или уже
+    // реализовано выше уровнем абстракции
+  }
+  // void set_in_chunk(const value_type& value) {
+  //   try {
+  //     Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, value);
+  //   } catch (...) {
+  //     throw;
+  //   }
+  //   // chunk_size_ += changing_delta_;
+  // }
   void set_in_chunk(value_type&& value) {
     try {
       Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_,
