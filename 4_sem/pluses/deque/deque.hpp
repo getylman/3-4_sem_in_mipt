@@ -443,8 +443,20 @@ class Deque<TempT, Alloc>::Chunk {
     chunk_tail_ = chunk_body_ + (chnk.chunk_tail_ - chnk.chunk_body_);
     r_chunk_confine_ = (l_chunk_confine_ = chunk_body_) + ChunkRank - 1;
   }
+  Chunk(Chunk<>&& chnk) noexcept
+      : chunk_body_(std::move(chnk.chunk_body_)),
+        chunk_size_(std::move(chnk.chunk_size_)),
+        chunk_head_(std::move(chnk.chunk_head_)),
+        chunk_tail_(std::move(chnk.chunk_tail_)),
+        l_chunk_confine_(std::move(chnk.l_chunk_confine_)),
+        r_chunk_confine_(std::move(chnk.r_chunk_confine_)) {
+    chnk.chunk_body_ = chnk.chunk_head_ = chnk.chunk_tail_ =
+        chnk.r_chunk_confine_ = chnk.l_chunk_confine_ = nullptr;
+    chnk.chunk_size_ = 0;
+  }
   template <typename AnotherAlloc>
-  Chunk<>& operator=(const typename Deque<TempT, AnotherAlloc>::Chunk<>& chnk) {
+  Chunk<>& operator=(
+      const typename Deque<TempT, AnotherAlloc>::Chunk<>& chnk) & {
     if (chunk_body_ != chnk.chunk_body_) {
       Chunk<> tmp_chunk;
       allocation_attempt_of_chunk(tmp_chunk.chunk_body_);
@@ -459,9 +471,26 @@ class Deque<TempT, Alloc>::Chunk {
     }
     return *this;
   }
+  Chunk<>& operator=(Chunk<>&& chnk) noexcept {
+    if (chunk_body_ != chnk.chunk_body_) {
+      chunk_body_ = std::move(chnk.chunk_body_);
+      chunk_size_ = std::move(chnk.chunk_size_);
+      chunk_head_ = std::move(chnk.chunk_head_);
+      chunk_tail_ = std::move(chnk.chunk_tail_);
+      l_chunk_confine_ = std::move(chnk.l_chunk_confine_);
+      r_chunk_confine_ = std::move(chnk.r_chunk_confine_);
+      chnk.chunk_body_ = chnk.chunk_head_ = chnk.chunk_tail_ =
+          chnk.r_chunk_confine_ = chnk.l_chunk_confine_ = nullptr;
+      chnk.chunk_size_ = 0;
+    }
+    return *this;
+  }
   ~Chunk() {
+    for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
+         i <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++i) {
+      Alloc_traits::destroy(all_tp_, chunk_body_ + i);
+    }
     Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
-    // я не дописал надо лучше
   }
   //*******************************************
   //*****************Getters*******************
@@ -485,15 +514,19 @@ class Deque<TempT, Alloc>::Chunk {
   }
   void right_set_chunk(const value_type& value) noexcept(
       std::is_nothrow_constructible_v<TempT>) {
-    construct_unit_attempt_of_chunk(chunk_tail_, value, r_changing_delta_);
+    construct_unit_attempt_of_chunk(chunk_tail_, value, r_changing_delta_); // подумать над move_if_noexxcept и как тут это заюзать
   }
   void left_set_chunk(value_type&& value) noexcept(
       std::is_nothrow_constructible_v<TempT>) {
     construct_unit_attempt_of_chunk(chunk_head_, value, l_changing_delta_);
+    // что там после перемещения останется неопределенное значени то мне без
+    // разницы
   }
   void right_set_chunk(value_type&& value) noexcept(
       std::is_nothrow_constructible_v<TempT>) {
     construct_unit_attempt_of_chunk(chunk_tail_, value, r_changing_delta_);
+    // что там после перемещения останется неопределенное значени то мне без
+    // разницы
   }
   //*******************************************
   //*****************Erasers*******************
