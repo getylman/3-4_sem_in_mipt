@@ -439,7 +439,7 @@ class Deque<TempT, Alloc>::Chunk {
               // and throw the exception of this situation
     }
     ++chunk_size_;
-    // проверка на то что можем ли закидывать в чанк или нет 
+    // проверка на то что можем ли закидывать в чанк или нет
     // или же там переход на следующий чанк это все будет или уже
     // реализовано выше уровнем абстракции
   }
@@ -458,27 +458,49 @@ class Deque<TempT, Alloc>::Chunk {
               // and throw the exception of this situation
     }
     ++chunk_size_;
-    // проверка на то что можем ли закидывать в чанк или нет 
+    // проверка на то что можем ли закидывать в чанк или нет
     // или же там переход на следующий чанк это все будет или уже
     // реализовано выше уровнем абстракции
   }
-  // void set_in_chunk(const value_type& value) {
-  //   try {
-  //     Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_, value);
-  //   } catch (...) {
-  //     throw;
-  //   }
-  //   // chunk_size_ += changing_delta_;
-  // }
-  void set_in_chunk(value_type&& value) {
+  void left_set_chunk(value_type&& value) noexcept(
+      std::is_nothrow_constructible_v<TempT>) {
+    if (chunk_size_ != 0) {
+      chunk_head_ += l_changing_delta_;
+    }
     try {
-      Alloc_traits::construct(all_tp_, chunk_body_ + chunk_size_,
-                              std::move_if_noexcept(value));
+      Alloc_traits::construct(all_tp_, chunk_head_, std::move_if_noexcept(value));
+      // если конструктор в состоянии кинуть исключение то произойдет копирование
     } catch (...) {
+      if (chunk_size_ != 0) {
+        chunk_head_ -= l_changing_delta_;
+      }
       throw;  // if construction of object failed it will stop constructing
               // and throw the exception of this situation
     }
-    // chunk_size_ += changing_delta_;
+    ++chunk_size_;
+    // проверка на то что можем ли закидывать в чанк или нет
+    // или же там переход на следующий чанк это все будет или уже
+    // реализовано выше уровнем абстракции
+  }
+  void right_set_chunk(value_type&& value) noexcept(
+      std::is_nothrow_constructible_v<TempT>) {
+    if (chunk_size_ != 0) {
+      chunk_tail_ += r_changing_delta_;
+    }
+    try {
+      Alloc_traits::construct(all_tp_, chunk_tail_, std::move_if_noexcept(value));
+      // если конструктор в состоянии кинуть исключение то произойдет копирование
+    } catch (...) {
+      if (chunk_size_ != 0) {
+        chunk_tail_ -= r_changing_delta_;
+      }
+      throw;  // if construction of object failed it will stop constructing
+              // and throw the exception of this situation
+    }
+    ++chunk_size_;
+    // проверка на то что можем ли закидывать в чанк или нет
+    // или же там переход на следующий чанк это все будет или уже
+    // реализовано выше уровнем абстракции
   }
   //*******************************************
   //*****************Erasers*******************
