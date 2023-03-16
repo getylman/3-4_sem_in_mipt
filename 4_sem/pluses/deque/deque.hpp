@@ -77,6 +77,8 @@ class Deque {
   // allocator trits for chunk
   using Chunk_pointer = Chunk_alloc_traits::pointer;
   // pointer for chunks
+  Chunk_alloc_type all_ch_;
+  // object of chunk allocator type
  public:
   //=================Constructors=================
   Deque();  // check https://habr.com/ru/post/505632/
@@ -135,12 +137,19 @@ class Deque {
   //==============================================
 
  private:
+  //================Deque Fields=================
   uint64_t total_size_ = 0;       // size of in full container
   uint64_t num_of_chunks_ = 0;    // how many chunks have a container
   Chunk_pointer body_ = nullptr;  // pointer of full deque. the end is just
                                   // body plus size
   Chunk_pointer head_chunk_ = nullptr;  // pointer of current head
   Chunk_pointer tail_chunk_ = nullptr;  // pointer of current tail
+  //=============================================
+  //=============Private Functions===============
+  void reserve_memory_in_deque(const uint64_t& num_of_units);
+  // function for allocation memory for vector of chunks
+  // kinda it will reserve enought chunks to keeping our units
+  //=============================================
 };
 
 // free space to my orientation
@@ -566,4 +575,25 @@ class Deque<TempT, Alloc>::Chunk {
 //               DECLARATION
 // инсерт и ерейс я буду делать через пуш и фронт полсе в нужное место через
 // последовательные свапы перенесу
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::reserve_memory_in_deque(
+    const uint64_t& num_of_units) {
+  const uint64_t required_amount_of_chunks =
+      (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
+  try {
+    body_ = Chunk_alloc_traits::allocate(all_ch_, required_amount_of_chunks);
+  } catch (...) {
+    throw;
+  }
+  // рассмотреть случай когда число чанков 1 и остальные условия
+  // в случае когда один чанк надо стянуть всё в середину а
+  // в остальных случаях крайние стянуть равномерно
+  // каждый чанк вызываем конструктор или заполняем пушами
+  num_of_chunks_ = required_amount_of_chunks;                // ?
+  total_size_ = num_of_chunks_;                              // ?
+  tail_chunk_ = (head_chunk_ = body_) + num_of_chunks_ - 1;  // ?
+  // ? -> хз нужна ли эта страка тут или можно закинуть внутрь конструктора
+}
+// добавить функцию для увелечения памяти под чанки при переполнения
+// аллоцированной части
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
