@@ -198,7 +198,8 @@ struct Deque<TempT, Alloc>::common_iterator {
   ~common_iterator() {
   }
   template <bool IsConstTmp>
-  common_iterator<IsConst>& operator=(const common_iterator<IsConstTmp>& iter) {
+  common_iterator<IsConst>& operator=(
+      const common_iterator<IsConstTmp>& iter) & noexcept {
     ptr_ = iter.ptr_;
     cur_chunk_ptr_ = iter.cur_chunk_ptr_;
     top_ptr_ = iter.top_ptr_;
@@ -379,7 +380,7 @@ class Deque<TempT, Alloc>::Chunk {
     dst.l_chunk_confine_ =
         dst.chunk_body_ + (src.l_chunk_confine_ - src.chunk_body_);
     dst.chunk_size_ = src.chunk_size_;
-  }
+  }  // function for copy chunk fields
   void copy_attempt_of_chunk(Chunk<>& src, Chunk<>& dst) {
     // src -> source   dst -> destination
     uint64_t idx = static_cast<uint64_t>(src.chunk_head_ - src.chunk_body_);
@@ -434,14 +435,26 @@ class Deque<TempT, Alloc>::Chunk {
     chunk_tail_ = chunk_head_ = (is_head) ? r_chunk_confine_ : l_chunk_confine_;
     // I hope that you remember the construction which one you used
   }
+  ~Chunk() {
+    for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
+         i <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++i) {
+      Alloc_traits::destroy(all_tp_, chunk_body_ + i);
+    }
+    Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    chunk_body_ = chunk_head_ = chunk_tail_ = r_chunk_confine_ =
+        l_chunk_confine_ = nullptr;
+    chunk_size_ = 0;
+  }
   template <typename AnotherAlloc>
   Chunk(const typename Deque<TempT, AnotherAlloc>::Chunk<>& chnk) {
-    allocation_attempt_of_chunk(chunk_body_);
-    copy_attempt_of_chunk(*this, chnk);
-    chunk_size_ = chnk.chunk_size_;
-    chunk_head_ = chunk_body_ + (chnk.chunk_head_ - chnk.chunk_body_);
-    chunk_tail_ = chunk_body_ + (chnk.chunk_tail_ - chnk.chunk_body_);
-    r_chunk_confine_ = (l_chunk_confine_ = chunk_body_) + ChunkRank - 1;
+    if (chnk.chunk_body_ != nullptr) {
+      allocation_attempt_of_chunk(chunk_body_);
+      copy_attempt_of_chunk(*this, chnk);
+      chunk_size_ = chnk.chunk_size_;
+      chunk_head_ = chunk_body_ + (chnk.chunk_head_ - chnk.chunk_body_);
+      chunk_tail_ = chunk_body_ + (chnk.chunk_tail_ - chnk.chunk_body_);
+      r_chunk_confine_ = (l_chunk_confine_ = chunk_body_) + ChunkRank - 1;
+    }
   }
   Chunk(Chunk<>&& chnk) noexcept
       : chunk_body_(std::move(chnk.chunk_body_)),
@@ -471,8 +484,9 @@ class Deque<TempT, Alloc>::Chunk {
     }
     return *this;
   }
-  Chunk<>& operator=(Chunk<>&& chnk) noexcept {
+  Chunk<>& operator=(Chunk<>&& chnk) & noexcept {
     if (chunk_body_ != chnk.chunk_body_) {
+      ~Chunk();
       chunk_body_ = std::move(chnk.chunk_body_);
       chunk_size_ = std::move(chnk.chunk_size_);
       chunk_head_ = std::move(chnk.chunk_head_);
@@ -485,13 +499,7 @@ class Deque<TempT, Alloc>::Chunk {
     }
     return *this;
   }
-  ~Chunk() {
-    for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
-         i <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++i) {
-      Alloc_traits::destroy(all_tp_, chunk_body_ + i);
-    }
-    Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
-  }
+
   //*******************************************
   //*****************Getters*******************
   uint64_t get_chunk_size() const noexcept {
@@ -514,7 +522,10 @@ class Deque<TempT, Alloc>::Chunk {
   }
   void right_set_chunk(const value_type& value) noexcept(
       std::is_nothrow_constructible_v<TempT>) {
-    construct_unit_attempt_of_chunk(chunk_tail_, value, r_changing_delta_); // подумать над move_if_noexxcept и как тут это заюзать
+    construct_unit_attempt_of_chunk(
+        chunk_tail_, value,
+        r_changing_delta_);  // подумать над move_if_noexxcept и как тут это
+                             // заюзать
   }
   void left_set_chunk(value_type&& value) noexcept(
       std::is_nothrow_constructible_v<TempT>) {
@@ -530,10 +541,21 @@ class Deque<TempT, Alloc>::Chunk {
   }
   //*******************************************
   //*****************Erasers*******************
-  void pop_from_chunk() noexcept {
-    Alloc_traits::destroy(all_tp_, chunk_body_ + chunk_size_ - 1);
+  void left_pop_chunk() noexcept {
+    Alloc_traits::destroy(all_tp_, chunk_head_);
     // if chunk was empty it will be UB
-    // chunk_size_ -= changing_delta_;
+    --chunk_size_;
+    if (chunk_size_ != 0) {
+      chunk_head_ -= l_changing_delta_;
+    }
+  }
+  void right_pop_chunk() noexcept {
+    Alloc_traits::destroy(all_tp_, chunk_tail_);
+    // if chunk was empty it will be UB
+    --chunk_size_;
+    if (chunk_size_ != 0) {
+      chunk_tail_ -= r_changing_delta_;
+    }
   }
   //*******************************************
 };
@@ -542,5 +564,6 @@ class Deque<TempT, Alloc>::Chunk {
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //               DECLARATION
-
+// инсерт и ерейс я буду делать через пуш и фронт полсе в нужное место через
+// последовательные свапы перенесу
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
