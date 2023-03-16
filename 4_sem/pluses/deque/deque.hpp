@@ -63,11 +63,13 @@ class Deque {
   template <uint64_t ChunkRank = set_chunk_rank()>
   class Chunk;
   //==============================================
-  //================Memory Controller=============
-  // struct MemoryController : public Type_alloc_type {
-  //
-  // };
-  // in moment I changed my mind
+  //===============Deque Body=====================
+  struct DequeBody;
+  // struct to keep all Deque fields
+  //==============================================
+  //============Deque Memory Controllere==========
+  struct MemoryController;
+  // struct which one can use memory resources
   //==============================================
  protected:
   using Chunk_alloc_type =
@@ -138,12 +140,8 @@ class Deque {
 
  private:
   //================Deque Fields=================
-  uint64_t total_size_ = 0;       // size of in full container
-  uint64_t num_of_chunks_ = 0;    // how many chunks have a container
-  Chunk_pointer body_ = nullptr;  // pointer of full deque. the end is just
-                                  // body plus size
-  Chunk_pointer head_chunk_ = nullptr;  // pointer of current head
-  Chunk_pointer tail_chunk_ = nullptr;  // pointer of current tail
+  DequeBody body_;  // full body of our container
+  MemoryController mem_con_;
   //=============================================
   //=============Private Functions===============
   void reserve_memory_in_deque(const uint64_t& num_of_units);
@@ -569,31 +567,76 @@ class Deque<TempT, Alloc>::Chunk {
   //*******************************************
 };
 //===========================================
+
+//==========Deque Memory Controllere=========
+template <typename TempT, typename Alloc>
+struct Deque<TempT, Alloc>::MemoryController : public Type_alloc_type,
+                                               public DequeBody {
+  MemoryController() noexcept(
+      std::is_nothrow_default_constructible_v<Type_alloc_type>)
+      : Type_alloc_type() {}
+  MemoryController(const Type_alloc_type& allc) noexcept
+      : Type_alloc_type(allc) {}
+  MemoryController(Type_alloc_type&& allc) noexcept
+      : Type_alloc_type(std::move(allc)) {}
+  MemoryController(MemoryController&&) = default;
+  MemoryController(MemoryController&& mcr, Type_alloc_type&& allc)
+      : Type_alloc_type(std::move(allc)), DequeBody(std::move(mcr)) {}
+};
+//===========================================
+
+//==============Deque Body===================
+template <typename TempT, typename Alloc>
+struct Deque<TempT, Alloc>::DequeBody {
+  uint64_t total_size = 0;             // size of in full container
+  uint64_t num_of_chunks = 0;          // how many chunks have a container
+  Chunk_pointer body = nullptr;        // pointer of full deque. the end is just
+                                       // body plus size
+  Chunk_pointer head_chunk = nullptr;  // pointer of current head
+  Chunk_pointer tail_chunk = nullptr;  // pointer of current tail
+};
+//===========================================
+
+//==========
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //               DECLARATION
 // инсерт и ерейс я буду делать через пуш и фронт полсе в нужное место через
 // последовательные свапы перенесу
+
+//==============Private Functions============
+// --- template <typename TempT, typename Alloc>
+// --- void Deque<TempT, Alloc>::reserve_memory_in_deque(
+// ---     const uint64_t& num_of_units) {
+// ---   const uint64_t required_amount_of_chunks =
+// ---       (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
+// ---   try {
+// ---     body_.body_ =
+// ---         Chunk_alloc_traits::allocate(all_ch_, required_amount_of_chunks);
+// ---   } catch (...) {
+// ---     throw;
+// ---   }
+// ---   // рассмотреть случай когда число чанков 1 и остальные условия
+// ---   // в случае когда один чанк надо стянуть всё в середину а
+// ---   // в остальных случаях крайние стянуть равномерно
+// ---   // каждый чанк вызываем конструктор или заполняем пушами
+// ---   body_.num_of_chunks_ = required_amount_of_chunks;          // ?
+// ---   total_size_ = num_of_chunks_;                              // ?
+// ---   tail_chunk_ = (head_chunk_ = body_) + num_of_chunks_ - 1;  // ?
+// ---   // ? -> хз нужна ли эта страка тут или можно закинуть внутрь
+// конструктора
+// --- }
+//===========================================
+//================Constructors===============
 template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::reserve_memory_in_deque(
-    const uint64_t& num_of_units) {
-  const uint64_t required_amount_of_chunks =
-      (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
-  try {
-    body_ = Chunk_alloc_traits::allocate(all_ch_, required_amount_of_chunks);
-  } catch (...) {
-    throw;
-  }
-  // рассмотреть случай когда число чанков 1 и остальные условия
-  // в случае когда один чанк надо стянуть всё в середину а
-  // в остальных случаях крайние стянуть равномерно
-  // каждый чанк вызываем конструктор или заполняем пушами
-  num_of_chunks_ = required_amount_of_chunks;                // ?
-  total_size_ = num_of_chunks_;                              // ?
-  tail_chunk_ = (head_chunk_ = body_) + num_of_chunks_ - 1;  // ?
-  // ? -> хз нужна ли эта страка тут или можно закинуть внутрь конструктора
+Deque<TempT, Alloc>::Deque() = default;
+
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::Deque(const size_t& count, const Alloc& alloc) {
 }
+//===========================================
+
 // добавить функцию для увелечения памяти под чанки при переполнения
 // аллоцированной части
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
