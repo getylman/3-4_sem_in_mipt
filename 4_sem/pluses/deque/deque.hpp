@@ -165,7 +165,7 @@ class Deque {
  private:
   //================Deque Fields=================
   // DequeBody body_;  // full body of our container
-  MemCntAndBodyOfDeque mem_con__body_;
+  MemCntAndBodyOfDeque mc_body_;
   //=============================================
 };
 
@@ -590,7 +590,7 @@ class Deque<TempT, Alloc>::Chunk {
 //==========Deque Memory Controllere=========
 template <typename TempT, typename Alloc>
 struct Deque<TempT, Alloc>::MemCntAndBodyOfDeque : public Type_alloc_type,
-                                               public DequeBody {
+                                                   public DequeBody {
   MemCntAndBodyOfDeque() noexcept(
       std::is_nothrow_default_constructible_v<Type_alloc_type>)
       : Type_alloc_type() {
@@ -609,12 +609,12 @@ struct Deque<TempT, Alloc>::MemCntAndBodyOfDeque : public Type_alloc_type,
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::Type_alloc_type&
 Deque<TempT, Alloc>::get_unit_allocator() noexcept {
-  return mem_con__body_;
+  return mc_body_;
 }
 template <typename TempT, typename Alloc>
 const typename Deque<TempT, Alloc>::Type_alloc_type&
 Deque<TempT, Alloc>::get_unit_allocator() const noexcept {
-  return mem_con__body_;
+  return mc_body_;
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::Chunk_alloc_type
@@ -623,11 +623,11 @@ Deque<TempT, Alloc>::get_chunk_allocator() const noexcept {
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::pointer Deque<TempT, Alloc>::chunk_allocation() {
-  return Alloc_traits::allocate(mem_con__body_, set_chunk_rank());
+  return Alloc_traits::allocate(mc_body_, set_chunk_rank());
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::chunk_dealocation(pointer ptr) noexcept {
-  Alloc_traits::dealocate(mem_con__body_, ptr, set_chunk_rank());
+  Alloc_traits::dealocate(mc_body_, ptr, set_chunk_rank());
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::Chunk_pointer
@@ -669,7 +669,16 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
     const uint64_t& num_of_units) {
   const uint64_t required_amount_of_chunks =
       (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
-  
+  mc_body_.total_size = num_of_units;
+  mc_body_.num_of_chunks = std::max(
+      kDefaultDequeLenth, static_cast<uint64_t>(required_amount_of_chunks + 2));
+  try {
+    mc_body_.body = body_allocation(mc_body_.num_of_chunks);
+  } catch (...) {
+    throw;
+    // did not allocate memory for body of deque but have not any meaning
+  }
+
 }
 
 //===========================================
