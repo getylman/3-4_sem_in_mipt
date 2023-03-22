@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 13.03.2023
+ * @date 17.03.2023
  */
 
 /*
@@ -67,10 +67,7 @@ class Deque {
   struct DequeBody;
   // struct to keep all Deque fields
   //==============================================
-  //============Deque Memory Controllere==========
-  struct MemoryController;
-  // struct which one can use memory resources
-  //==============================================
+
  protected:
   using Chunk_alloc_type =
       typename Alloc_traits::template rebind<Chunk<>>::other;
@@ -81,6 +78,24 @@ class Deque {
   // pointer for chunks
   Chunk_alloc_type all_ch_;
   // object of chunk allocator type
+ private:
+  //============Deque Memory Controllere==========
+  struct MemoryController;
+  // struct which one can use memory resources
+  Type_alloc_type& get_unit_allocator() noexcept;
+  const Type_alloc_type& get_unit_allocator() const noexcept;
+  Chunk_alloc_type get_chunk_allocator() const noexcept;
+  pointer chunk_allocation();
+  void chunk_dealocation(pointer ptr) noexcept;
+  Chunk_pointer body_allocation(const uint64_t& size);
+  void body_dealocation(Chunk_pointer ptr, const uint64_t& size) noexcept;
+  void reserve_memory_in_deque(const uint64_t& num_of_units);
+  // function for allocation memory for vector of chunks
+  // kinda it will reserve enought chunks to keeping our units
+  void body_range_construction(Chunk_pointer head, Chunk_pointer tail);
+  void body_range_destruction(Chunk_pointer head, Chunk_pointer tail);
+  //==============================================
+
  public:
   //=================Constructors=================
   Deque();  // check https://habr.com/ru/post/505632/
@@ -142,11 +157,6 @@ class Deque {
   //================Deque Fields=================
   DequeBody body_;  // full body of our container
   MemoryController mem_con_;
-  //=============================================
-  //=============Private Functions===============
-  void reserve_memory_in_deque(const uint64_t& num_of_units);
-  // function for allocation memory for vector of chunks
-  // kinda it will reserve enought chunks to keeping our units
   //=============================================
 };
 
@@ -574,15 +584,54 @@ struct Deque<TempT, Alloc>::MemoryController : public Type_alloc_type,
                                                public DequeBody {
   MemoryController() noexcept(
       std::is_nothrow_default_constructible_v<Type_alloc_type>)
-      : Type_alloc_type() {}
+      : Type_alloc_type() {
+  }
   MemoryController(const Type_alloc_type& allc) noexcept
-      : Type_alloc_type(allc) {}
+      : Type_alloc_type(allc) {
+  }
   MemoryController(Type_alloc_type&& allc) noexcept
-      : Type_alloc_type(std::move(allc)) {}
+      : Type_alloc_type(std::move(allc)) {
+  }
   MemoryController(MemoryController&&) = default;
   MemoryController(MemoryController&& mcr, Type_alloc_type&& allc)
-      : Type_alloc_type(std::move(allc)), DequeBody(std::move(mcr)) {}
+      : Type_alloc_type(std::move(allc)), DequeBody(std::move(mcr)) {
+  }
 };
+template <typename TempT, typename Alloc>
+typename Deque<TempT, Alloc>::Type_alloc_type&
+Deque<TempT, Alloc>::get_unit_allocator() noexcept {
+  return mem_con_;
+}
+template <typename TempT, typename Alloc>
+const typename Deque<TempT, Alloc>::Type_alloc_type&
+Deque<TempT, Alloc>::get_unit_allocator() const noexcept {
+  return mem_con_;
+}
+template <typename TempT, typename Alloc>
+typename Deque<TempT, Alloc>::Chunk_alloc_type
+Deque<TempT, Alloc>::get_chunk_allocator() const noexcept {
+  return Chunk_alloc_type(get_unit_allocator());
+}
+template <typename TempT, typename Alloc>
+typename Deque<TempT, Alloc>::pointer Deque<TempT, Alloc>::chunk_allocation() {
+  return Alloc_traits::allocate(mem_con_, set_chunk_rank());
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::chunk_dealocation(pointer ptr) noexcept {
+  Alloc_traits::dealocate(mem_con_, ptr, set_chunk_rank());
+}
+template <typename TempT, typename Alloc>
+typename Deque<TempT, Alloc>::Chunk_pointer
+Deque<TempT, Alloc>::body_allocation(const uint64_t& size) {
+  Chunk_alloc_type chunk_allocator = get_chunk_allocator();
+  return Chunk_alloc_traits::allocate(chunk_allocator, size);
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::body_dealocation(Chunk_pointer ptr,
+                                           const uint64_t& size) noexcept {
+  Chunk_alloc_type chunk_allocator = get_chunk_allocator();
+  Chunk_alloc_traits::dealocate(chunk_allocation, ptr, size);
+}
 //===========================================
 
 //==============Deque Body===================
@@ -594,10 +643,20 @@ struct Deque<TempT, Alloc>::DequeBody {
                                        // body plus size
   Chunk_pointer head_chunk = nullptr;  // pointer of current head
   Chunk_pointer tail_chunk = nullptr;  // pointer of current tail
+
+  DequeBody() noexcept : body(), head_chunk(), tail_chunk() {
+  }
+  DequeBody(const DequeBody&) = default;
+  DequeBody& operator=(const DequeBody&) = default;
+  DequeBody(DequeBody&& dqb) noexcept : DequeBody(dqb) {
+    dqb = DequeBody();
+  }
+  void exchange_data(DequeBody& dqb) noexcept {
+    std::swap(*this, dqb);
+  }
 };
 //===========================================
 
-//==========
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -606,6 +665,7 @@ struct Deque<TempT, Alloc>::DequeBody {
 // последовательные свапы перенесу
 
 //==============Private Functions============
+
 // --- template <typename TempT, typename Alloc>
 // --- void Deque<TempT, Alloc>::reserve_memory_in_deque(
 // ---     const uint64_t& num_of_units) {
