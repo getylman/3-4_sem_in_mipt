@@ -803,14 +803,14 @@ const TempT& Deque<TempT, Alloc>::operator[](const size_t& index) const noexcept
 }
 template <typename TempT, typename Alloc>
 TempT& Deque<TempT, Alloc>::at(const size_t& index) {
-  if (index >= mc_body_.total_size) {
+  if (index >= size()) {
     throw std::out_of_range("you want to access a non-existent element");
   }
   return *this[index];
 }
 template <typename TempT, typename Alloc>
 const TempT& Deque<TempT, Alloc>::at(const size_t& index) const {
-  if (index >= mc_body_.total_size) {
+  if (index >= size()) {
     throw std::out_of_range("you want to access a non-existent element");
   }
   return *this[index];
