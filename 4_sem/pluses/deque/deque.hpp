@@ -101,11 +101,19 @@ class Deque {
   void allocation_attempt_of_deque_body();
   void constrcution_attempt_of_deque_body(Chunk_pointer& ptr_head_chunk,
                                           Chunk_pointer& ptr_tail_chunk);
+  // functions which used in reserve_memory_in_deque
   void reserve_memory_in_deque(const uint64_t& num_of_units);
   // function for allocation memory for vector of chunks
   // kinda it will reserve enought chunks to keeping our units
   void body_range_construction(Chunk_pointer head, Chunk_pointer tail);
   void body_range_destruction(Chunk_pointer head, Chunk_pointer tail) noexcept;
+  //==============================================
+  //========Functions for unit monipulations======
+  void priv_pop_back() noexcept;
+  void priv_pop_front() noexcept;
+  // priv -> private
+  // I want realize all logic in private function
+  // and call them in public functions
   //==============================================
 
  public:
@@ -147,10 +155,10 @@ class Deque {
   //===========Modification methods===============
   void push_back(const TempT& elem);
   void push_back(TempT&& elem);
-  void pop_back();
+  void pop_back() noexcept;
   void push_front(const TempT& elem);
   void push_front(TempT&& elem);
-  void pop_front();
+  void pop_front() noexcept;
   //==============================================
   //================Iterator methods==============
   iterator begin() noexcept;
@@ -433,10 +441,8 @@ class Deque<TempT, Alloc>::Chunk {
       throw;
     }
   }  // tring to copy from src to dst chunk
-  void construct_unit_attempt_of_chunk(
-      pointer& ptr, TempT&& value,
-      uint16_t&
-          changing_delta) noexcept(std::is_nothrow_constructible_v<TempT>) {
+  void construct_unit_attempt_of_chunk(pointer& ptr, TempT&& value,
+                                       uint16_t& changing_delta) {
     if (chunk_size_ != 0) {
       ptr += changing_delta;
     }
@@ -552,25 +558,24 @@ class Deque<TempT, Alloc>::Chunk {
   }
   //*******************************************
   //*****************Setters*******************
-  void left_set_chunk(const value_type& value) noexcept(
-      std::is_nothrow_constructible_v<TempT>) {
-    construct_unit_attempt_of_chunk(chunk_head_, value, l_changing_delta_);
-  }
-  void right_set_chunk(const value_type& value) noexcept(
-      std::is_nothrow_constructible_v<TempT>) {
-    construct_unit_attempt_of_chunk(
-        chunk_tail_, value,
-        r_changing_delta_);  // подумать над move_if_noexxcept и как тут это
-                             // заюзать
-  }
-  void left_set_chunk(value_type&& value) noexcept(
-      std::is_nothrow_constructible_v<TempT>) {
+  // void left_set_chunk(const value_type& value) noexcept(
+  //     std::is_nothrow_constructible_v<TempT>) {
+  //   construct_unit_attempt_of_chunk(chunk_head_, value, l_changing_delta_);
+  // }
+  // void right_set_chunk(const value_type& value) noexcept(
+  //     std::is_nothrow_constructible_v<TempT>) {
+  //   construct_unit_attempt_of_chunk(
+  //       chunk_tail_, value,
+  //       r_changing_delta_);  // подумать над move_if_noexxcept и как тут это
+  //                            // заюзать
+  // }
+  // commented because have better versions with &&
+  void left_set_chunk(value_type&& value) {
     construct_unit_attempt_of_chunk(chunk_head_, value, l_changing_delta_);
     // что там после перемещения останется неопределенное значени то мне без
     // разницы
   }
-  void right_set_chunk(value_type&& value) noexcept(
-      std::is_nothrow_constructible_v<TempT>) {
+  void right_set_chunk(value_type&& value) {
     construct_unit_attempt_of_chunk(chunk_tail_, value, r_changing_delta_);
     // что там после перемещения останется неопределенное значени то мне без
     // разницы
@@ -720,7 +725,30 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
   mc_body_.tail_chunk = ptr_tail_chunk;
   // there seems to be no sin
 }
-
+//===========================================
+//======Functions for unit monipulations=====
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::priv_pop_back() noexcept {
+  mc_body_.tail_chunk->right_pop_chunk();
+  if (mc_body_.tail_chunk->chunk_empty()) {
+    Chunk_alloc_type chunk_allocator = get_chunk_allocator();
+    Chunk_pointer tmp_ptr = mc_body_.tail_chunk;
+    --mc_body_.tail_chunk;
+    Chunk_alloc_traits::destroy(chunk_allocator, tmp_ptr);
+    tmp_ptr = nullptr;
+  }
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::priv_pop_front() noexcept {
+  mc_body_.head_chunk->left_pop_chunk();
+  if (mc_body_.head_chunk->chunk_empty()) {
+    Chunk_alloc_type chunk_allocator = get_chunk_allocator();
+    Chunk_pointer tmp_ptr = mc_body_.head_chunk;
+    --mc_body_.head_chunk;
+    Chunk_alloc_traits::destroy(chunk_allocator, tmp_ptr);
+    tmp_ptr = nullptr;
+  }
+}
 //===========================================
 
 //==============Deque Body===================
@@ -847,7 +875,14 @@ bool Deque<TempT, Alloc>::empty() const noexcept {
 }
 //===========================================
 //===========Modification methods============
-
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::pop_back() noexcept {
+  priv_pop_back();
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::pop_front() noexcept {
+  priv_pop_front();
+}
 //===========================================
 //=============Iterator methods==============
 template <typename TempT, typename Alloc>
