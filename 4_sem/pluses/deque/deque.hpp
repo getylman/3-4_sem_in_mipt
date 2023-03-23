@@ -202,6 +202,14 @@ struct Deque<TempT, Alloc>::common_iterator {
   // pointer of current chunk
 
   //********************************************
+  //***********Private Functions****************
+  void change_chunk(Chunk<> new_chunk) noexcept {
+    cur_chunk_ptr_ = new_chunk;
+    top_ptr_ = new_chunk.chunk_body_;
+    bottom_ptr_ =
+        new_chunk.chunk_body_ + static_cast<difference_type>(set_chunk_rank());
+  }
+  //********************************************
  public:
   //****************Constructors****************
   common_iterator() noexcept {
@@ -250,12 +258,6 @@ struct Deque<TempT, Alloc>::common_iterator {
   // commented to the best times
   conditional_ref operator[](const int64_t& idx) const noexcept {
     return *(*this + idx);
-  }
-  void change_chunk(Chunk<> new_chunk) noexcept {
-    cur_chunk_ptr_ = new_chunk;
-    top_ptr_ = new_chunk.chunk_body_;
-    bottom_ptr_ =
-        new_chunk.chunk_body_ + static_cast<difference_type>(set_chunk_rank());
   }
   //********************************************
   //************Aithmetic operators*************
@@ -462,9 +464,12 @@ class Deque<TempT, Alloc>::Chunk {
     // I hope that you remember the construction which one you used
   }
   ~Chunk() {
-    for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
-         i <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++i) {
-      Alloc_traits::destroy(all_tp_, chunk_body_ + i);
+    if (chunk_size_ != 0) {
+      // if one of elements of chunk is constructed
+      for (uint64_t i = static_cast<uint64_t>(chunk_head_ - chunk_body_);
+           i <= static_cast<uint64_t>(chunk_tail_ - chunk_body_); ++i) {
+        Alloc_traits::destroy(all_tp_, chunk_body_ + i);
+      }
     }
     Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
     chunk_body_ = chunk_head_ = chunk_tail_ = r_chunk_confine_ =
@@ -642,26 +647,29 @@ void Deque<TempT, Alloc>::body_dealocation(Chunk_pointer ptr,
   Chunk_alloc_traits::dealocate(chunk_allocation, ptr, size);
   ptr = nullptr;
 }
-template <typename TempT, typename Alloc>  // ?
+template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::body_range_construction(Chunk_pointer head,
                                                   Chunk_pointer tail) {
   Chunk_pointer cur_ptr = nullptr;
+  Chunk_alloc_type chunk_allocator = get_chunk_allocator();
   try {
-    for (cur_ptr = head; cur_ptr <= tail; ++cur_ptr) {
-      *cur_ptr = chunk_allocation();
+    Chunk_alloc_traits::construct(chunk_allocator, head, true);
+    for (cur_ptr = ++head; cur_ptr <= tail; ++cur_ptr) {
+      Chunk_alloc_traits::construct(chunk_allocator, cur_ptr, false);
     }
   } catch (...) {
     for (Chunk_pointer id_ptr = head; id_ptr < cur_ptr; ++id_ptr) {
-      chunk_dealocation(*id_ptr);
+      Chunk_alloc_traits::destroy(chunk_allocator, id_ptr);
     }
     throw;
   }
 }
-template <typename TempT, typename Alloc>  // ?
+template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::body_range_destruction(Chunk_pointer head,
                                                  Chunk_pointer tail) noexcept {
+  Chunk_alloc_type chunk_allocator = get_chunk_allocator();
   for (Chunk_pointer cur_ptr = head; cur_ptr <= tail; ++cur_ptr) {
-    chunk_dealocation(*cur_ptr);
+    Chunk_alloc_traits::destroy(chunk_allocator, cur_ptr);
   }
 }
 template <typename TempT, typename Alloc>
@@ -681,7 +689,8 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
   Chunk_pointer ptr_head_chunk =
       (mc_body_.body +
        ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
-  Chunk_pointer ptr_tail_chunk = mc_body_.head_chunk + required_amount_of_chunks - 1;
+  Chunk_pointer ptr_tail_chunk =
+      mc_body_.head_chunk + required_amount_of_chunks - 1;
   try {
     body_range_construction(ptr_head_chunk, ptr_tail_chunk);
   } catch (...) {
