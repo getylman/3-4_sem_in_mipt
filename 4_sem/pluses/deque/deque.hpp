@@ -98,6 +98,9 @@ class Deque {
   void chunk_dealocation(pointer ptr) noexcept;
   Chunk_pointer body_allocation(const uint64_t& size);
   void body_dealocation(Chunk_pointer ptr, const uint64_t& size) noexcept;
+  void allocation_attempt_of_deque_body();
+  void constrcution_attempt_of_deque_body(Chunk_pointer& ptr_head_chunk,
+                                          Chunk_pointer& ptr_tail_chunk);
   void reserve_memory_in_deque(const uint64_t& num_of_units);
   // function for allocation memory for vector of chunks
   // kinda it will reserve enought chunks to keeping our units
@@ -673,24 +676,17 @@ void Deque<TempT, Alloc>::body_range_destruction(Chunk_pointer head,
   }
 }
 template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::reserve_memory_in_deque(
-    const uint64_t& num_of_units) {
-  const uint64_t required_amount_of_chunks =
-      (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
-  mc_body_.total_size = num_of_units;
-  mc_body_.num_of_chunks = std::max(
-      kDefaultDequeLenth, static_cast<uint64_t>(required_amount_of_chunks + 2));
+void Deque<TempT, Alloc>::allocation_attempt_of_deque_body() {
   try {
     mc_body_.body = body_allocation(mc_body_.num_of_chunks);
   } catch (...) {
     throw;
     // did not allocate memory for body of deque but have not any meaning
   }
-  Chunk_pointer ptr_head_chunk =
-      (mc_body_.body +
-       ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
-  Chunk_pointer ptr_tail_chunk =
-      mc_body_.head_chunk + required_amount_of_chunks - 1;
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::constrcution_attempt_of_deque_body(
+    Chunk_pointer& ptr_head_chunk, Chunk_pointer& ptr_tail_chunk) {
   try {
     body_range_construction(ptr_head_chunk, ptr_tail_chunk);
   } catch (...) {
@@ -700,6 +696,21 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
     throw;
     // did not allocate memory for chunks
   }
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::reserve_memory_in_deque(
+    const uint64_t& num_of_units) {
+  const uint64_t required_amount_of_chunks =
+      (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
+  mc_body_.total_size = num_of_units;
+  mc_body_.num_of_chunks = std::max(
+      kDefaultDequeLenth, static_cast<uint64_t>(required_amount_of_chunks + 2));
+  allocation_attempt_of_deque_body();
+  Chunk_pointer ptr_head_chunk =
+      (mc_body_.body +
+       ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
+  Chunk_pointer ptr_tail_chunk =
+      mc_body_.head_chunk + required_amount_of_chunks - 1;
   mc_body_.head_chunk = ptr_head_chunk;
   mc_body_.tail_chunk = ptr_tail_chunk;
   // there seems to be no sin
