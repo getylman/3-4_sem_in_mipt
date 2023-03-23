@@ -678,7 +678,22 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
     throw;
     // did not allocate memory for body of deque but have not any meaning
   }
-
+  Chunk_pointer ptr_head_chunk =
+      (mc_body_.body +
+       ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
+  Chunk_pointer ptr_tail_chunk = mc_body_.head_chunk + required_amount_of_chunks - 1;
+  try {
+    body_range_construction(ptr_head_chunk, ptr_tail_chunk);
+  } catch (...) {
+    body_dealocation(mc_body_.body, mc_body_.num_of_chunks);
+    mc_body_.body = nullptr;
+    mc_body_.num_of_chunks = 0;
+    throw;
+    // did not allocate memory for chunks
+  }
+  mc_body_.head_chunk = ptr_head_chunk;
+  mc_body_.tail_chunk = ptr_tail_chunk;
+  // there seems to be no sin
 }
 
 //===========================================
