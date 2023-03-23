@@ -110,8 +110,10 @@ class Deque {
 
  public:
   //=================Constructors=================
-  Deque();  // check https://habr.com/ru/post/505632/
-  explicit Deque(const size_t& count, const Alloc& alloc);
+  static_assert(std::is_same_v<typename Alloc::value_type, TempT>);
+  // if types are not same will be CE
+  Deque();
+  explicit Deque(const size_t& count, const Alloc& alloc = Alloc());
   explicit Deque(const Alloc& alloc);
   explicit Deque(const size_t& count, const TempT& value,
                  const Alloc& alloc = Alloc());
@@ -119,7 +121,7 @@ class Deque {
   Deque(const Deque<TempT, AnotherAlloc>& deq);
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque(Deque<TempT, AnotherAlloc>&& deq);
-  ~Deque();
+  ~Deque() noexcept;
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque<TempT, AnotherAlloc>& operator=(
       const Deque<TempT, AnotherAlloc>& deq) &;
@@ -701,17 +703,19 @@ template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::reserve_memory_in_deque(
     const uint64_t& num_of_units) {
   const uint64_t required_amount_of_chunks =
-      (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
+      num_of_units / set_chunk_rank() + 1;
   mc_body_.total_size = num_of_units;
   mc_body_.num_of_chunks = std::max(
       kDefaultDequeLenth, static_cast<uint64_t>(required_amount_of_chunks + 2));
   allocation_attempt_of_deque_body();
+  // will try allocate memory for deque body
   Chunk_pointer ptr_head_chunk =
       (mc_body_.body +
        ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
   Chunk_pointer ptr_tail_chunk =
       mc_body_.head_chunk + required_amount_of_chunks - 1;
   constrcution_attempt_of_deque_body(ptr_head_chunk, ptr_tail_chunk);
+  // will try allocate memory for chunks in the deque
   mc_body_.head_chunk = ptr_head_chunk;
   mc_body_.tail_chunk = ptr_tail_chunk;
   // there seems to be no sin
@@ -751,34 +755,81 @@ struct Deque<TempT, Alloc>::DequeBody {
 
 //==============Private Functions============
 
-// --- template <typename TempT, typename Alloc>
-// --- void Deque<TempT, Alloc>::reserve_memory_in_deque(
-// ---     const uint64_t& num_of_units) {
-// ---   const uint64_t required_amount_of_chunks =
-// ---       (num_of_units + set_chunk_rank() - 1) / set_chunk_rank();
-// ---   try {
-// ---     body_.body_ =
-// ---         Chunk_alloc_traits::allocate(all_ch_, required_amount_of_chunks);
-// ---   } catch (...) {
-// ---     throw;
-// ---   }
-// ---   // рассмотреть случай когда число чанков 1 и остальные условия
-// ---   // в случае когда один чанк надо стянуть всё в середину а
-// ---   // в остальных случаях крайние стянуть равномерно
-// ---   // каждый чанк вызываем конструктор или заполняем пушами
-// ---   body_.num_of_chunks_ = required_amount_of_chunks;          // ?
-// ---   total_size_ = num_of_chunks_;                              // ?
-// ---   tail_chunk_ = (head_chunk_ = body_) + num_of_chunks_ - 1;  // ?
-// ---   // ? -> хз нужна ли эта страка тут или можно закинуть внутрь
-// конструктора
-// --- }
 //===========================================
 //================Constructors===============
 template <typename TempT, typename Alloc>
-Deque<TempT, Alloc>::Deque() = default;
+Deque<TempT, Alloc>::Deque() : mc_body_() {
+  reserve_memory_in_deque(0);
+}
 
 template <typename TempT, typename Alloc>
-Deque<TempT, Alloc>::Deque(const size_t& count, const Alloc& alloc) {
+Deque<TempT, Alloc>::Deque(const Alloc& alloc) : mc_body_(alloc) {
+  reserve_memory_in_deque(0);
+}
+
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::Deque(const size_t& count, const Alloc& alloc) : mc_body_(alloc) {
+  reserve_memory_in_deque(count);
+}
+
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::~Deque() noexcept {
+  body_range_destruction(mc_body_.head_chunk, mc_body_.tail_chunk);
+  body_dealocation();
+}
+//===========================================
+//==========Accessing a element==============
+template <typename TempT, typename Alloc>
+TempT& Deque<TempT, Alloc>::operator[](const size_t& index) noexcept {
+  size_t new_index = index;
+  if (mc_body_.head_chunk->chunk_size_ > index) {
+    return *(mc_body_.head_chunk->chunk_head_ + index);
+  }
+  new_index -= mc_body_.head_chunk->chunk_size_;
+  const size_t index_of_chunk = new_index / set_chunk_rank() + 1;
+  const size_t index_of_unit = new_index % set_chunk_rank();
+  return *((mc_body_.head_chunk + index_of_chunk)->chunk_haed_ + index_of_unit);
+}
+template <typename TempT, typename Alloc>
+const TempT& Deque<TempT, Alloc>::operator[](const size_t& index) const noexcept {
+  size_t new_index = index;
+  if (mc_body_.head_chunk->chunk_size_ > index) {
+    return *(mc_body_.head_chunk->chunk_head_ + index);
+  }
+  new_index -= mc_body_.head_chunk->chunk_size_;
+  const size_t index_of_chunk = new_index / set_chunk_rank() + 1;
+  const size_t index_of_unit = new_index % set_chunk_rank();
+  return *((mc_body_.head_chunk + index_of_chunk)->chunk_haed_ + index_of_unit);
+}
+template <typename TempT, typename Alloc>
+TempT& Deque<TempT, Alloc>::at(const size_t& index) {
+  if (index >= mc_body_.total_size) {
+    throw std::out_of_range("you want to access a non-existent element");
+  }
+  return *this[index];
+}
+template <typename TempT, typename Alloc>
+const TempT& Deque<TempT, Alloc>::at(const size_t& index) const {
+  if (index >= mc_body_.total_size) {
+    throw std::out_of_range("you want to access a non-existent element");
+  }
+  return *this[index];
+}
+template <typename TempT, typename Alloc>
+TempT& Deque<TempT, Alloc>::front() noexcept {
+  return *this[0];
+}
+template <typename TempT, typename Alloc>
+const TempT& Deque<TempT, Alloc>::front() const noexcept {
+  return *this[0];
+}
+template <typename TempT, typename Alloc>
+TempT& Deque<TempT, Alloc>::back() noexcept {
+  return *this[size() - 1];
+}
+template <typename TempT, typename Alloc>
+const TempT& Deque<TempT, Alloc>::back() const noexcept {
+  return *this[size() - 1];
 }
 //===========================================
 
