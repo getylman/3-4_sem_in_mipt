@@ -711,6 +711,7 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
        ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
   Chunk_pointer ptr_tail_chunk =
       mc_body_.head_chunk + required_amount_of_chunks - 1;
+  constrcution_attempt_of_deque_body(ptr_head_chunk, ptr_tail_chunk);
   mc_body_.head_chunk = ptr_head_chunk;
   mc_body_.tail_chunk = ptr_tail_chunk;
   // there seems to be no sin
