@@ -846,6 +846,74 @@ bool Deque<TempT, Alloc>::empty() const noexcept {
   return size() == 0;
 }
 //===========================================
+//===========Modification methods============
+
+//===========================================
+//=============Iterator methods==============
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::begin() noexcept {
+  return Deque<TempT, Alloc>::iterator(mc_body_.head_chunk->chunk_head,
+                                       mc_body_.head_chunk);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::begin()
+    const noexcept {
+  return Deque<TempT, Alloc>::const_iterator(mc_body_.head_chunk->chunk_head,
+                                             mc_body_.head_chunk);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::cbegin()
+    const noexcept {
+  return Deque<TempT, Alloc>::const_iterator(mc_body_.head_chunk->chunk_head,
+                                             mc_body_.head_chunk);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::end() noexcept {
+  return Deque<TempT, Alloc>::iterator(mc_body_.tail_chunk->chunk_tail,
+                                       mc_body_.tail_chunk) +
+         1;
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::end() const noexcept {
+  return Deque<TempT, Alloc>::const_iterator(mc_body_.tail_chunk->chunk_tail,
+                                             mc_body_.tail_chunk) +
+         1;
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::cend() const noexcept {
+  return Deque<TempT, Alloc>::const_iterator(mc_body_.tail_chunk->chunk_tail,
+                                             mc_body_.tail_chunk) +
+         1;
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::reverse_iterator Deque<TempT, Alloc>::rbegin() noexcept {
+  return reverse_iterator(end() - 1);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_reverse_iterator Deque<TempT, Alloc>::rbegin()
+    const noexcept {
+  return const_reverse_iterator(end() - 1);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_reverse_iterator Deque<TempT, Alloc>::crbegin()
+    const noexcept {
+  return const_reverse_iterator(end() - 1);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::reverse_iterator Deque<TempT, Alloc>::rend() noexcept {
+  return reverse_iterator(begin() - 1);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_reverse_iterator Deque<TempT, Alloc>::rend()
+    const noexcept {
+  return const_reverse_iterator(begin() - 1);
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::const_reverse_iterator Deque<TempT, Alloc>::crend()
+    const noexcept {
+  return const_reverse_iterator(begin() - 1);
+}
+//===========================================
 
 // добавить функцию для увелечения памяти под чанки при переполнения
 // аллоцированной части
