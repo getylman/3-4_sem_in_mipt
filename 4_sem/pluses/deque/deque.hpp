@@ -768,7 +768,8 @@ Deque<TempT, Alloc>::Deque(const Alloc& alloc) : mc_body_(alloc) {
 }
 
 template <typename TempT, typename Alloc>
-Deque<TempT, Alloc>::Deque(const size_t& count, const Alloc& alloc) : mc_body_(alloc) {
+Deque<TempT, Alloc>::Deque(const size_t& count, const Alloc& alloc)
+    : mc_body_(alloc) {
   reserve_memory_in_deque(count);
 }
 
@@ -791,7 +792,8 @@ TempT& Deque<TempT, Alloc>::operator[](const size_t& index) noexcept {
   return *((mc_body_.head_chunk + index_of_chunk)->chunk_haed_ + index_of_unit);
 }
 template <typename TempT, typename Alloc>
-const TempT& Deque<TempT, Alloc>::operator[](const size_t& index) const noexcept {
+const TempT& Deque<TempT, Alloc>::operator[](
+    const size_t& index) const noexcept {
   size_t new_index = index;
   if (mc_body_.head_chunk->chunk_size_ > index) {
     return *(mc_body_.head_chunk->chunk_head_ + index);
@@ -830,6 +832,18 @@ TempT& Deque<TempT, Alloc>::back() noexcept {
 template <typename TempT, typename Alloc>
 const TempT& Deque<TempT, Alloc>::back() const noexcept {
   return *this[size() - 1];
+}
+//===========================================
+//==============SizeInformation==============
+template <typename TempT, typename Alloc>
+size_t Deque<TempT, Alloc>::size() const noexcept {
+  return static_cast<size_t>(
+      iterator(mc_body_.tail_chunk->chunk_tail, mc_body_.tail_chunk) -
+      iterator(mc_body_.head_chunk->chunk_head, mc_body_.head_chunk));
+}
+template <typename TempT, typename Alloc>
+bool Deque<TempT, Alloc>::empty() const noexcept {
+  return size() == 0;
 }
 //===========================================
 
