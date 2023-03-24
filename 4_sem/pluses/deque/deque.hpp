@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 17.03.2023
+ * @date 23.03.2023
  */
 
 /*
@@ -95,20 +95,28 @@ class Deque {
   const Type_alloc_type& get_unit_allocator() const noexcept;
   Chunk_alloc_type get_chunk_allocator() const noexcept;
   pointer chunk_allocation();
-  void chunk_dealocation(pointer ptr) noexcept;
-  Chunk_pointer body_allocation(const uint64_t& size);
-  void body_dealocation(Chunk_pointer ptr, const uint64_t& size) noexcept;
-  void allocation_attempt_of_deque_body();
+  void chunk_dealocation(pointer ptr) noexcept;         //---
+  Chunk_pointer body_allocation(const uint64_t& size);  //---
+  void body_dealocation(Chunk_pointer ptr,
+                        const uint64_t& size) noexcept;  //---
+  void allocation_attempt_of_deque_body(Chunk_pointer& ptr,
+                                        const uint64_t& size);  //---
   void constrcution_attempt_of_deque_body(Chunk_pointer& ptr_head_chunk,
-                                          Chunk_pointer& ptr_tail_chunk);
+                                          Chunk_pointer& ptr_tail_chunk,
+                                          Chunk_pointer& ptr_body,
+                                          uint64_t& size);  //---
   // functions which used in reserve_memory_in_deque
-  void reserve_memory_in_deque(const uint64_t& num_of_units);
+  void reserve_memory_in_deque(const uint64_t& num_of_units);  //---
   // function for allocation memory for vector of chunks
   // kinda it will reserve enought chunks to keeping our units
-  void body_range_construction(Chunk_pointer head, Chunk_pointer tail);
-  void body_range_destruction(Chunk_pointer head, Chunk_pointer tail) noexcept;
+  void body_range_construction(Chunk_pointer head, Chunk_pointer tail);  //---
+  void body_range_destruction(Chunk_pointer head,
+                              Chunk_pointer tail) noexcept;  //---
+  // functions for building
   //==============================================
   //========Functions for unit monipulations======
+  void priv_push_back(TempT&& elem);
+  void priv_push_front(TempT&& elem);
   void priv_pop_back() noexcept;
   void priv_pop_front() noexcept;
   // priv -> private
@@ -153,10 +161,10 @@ class Deque {
   bool empty() const noexcept;
   //==============================================
   //===========Modification methods===============
-  void push_back(const TempT& elem);
+  // void push_back(const TempT& elem);
   void push_back(TempT&& elem);
   void pop_back() noexcept;
-  void push_front(const TempT& elem);
+  // void push_front(const TempT& elem);
   void push_front(TempT&& elem);
   void pop_front() noexcept;
   //==============================================
@@ -191,6 +199,32 @@ class Deque {
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //    NO MEMBER DEFINITION AND DECLARATION
+//==============Deque Body===================
+template <typename TempT, typename Alloc>
+struct Deque<TempT, Alloc>::DequeBody {
+  uint64_t total_size = 0;             // size of in full container
+  uint64_t num_of_chunks = 0;          // how many chunks have a container
+  Chunk_pointer body = nullptr;        // pointer of full deque. the end is just
+                                       // body plus size
+  Chunk_pointer head_chunk = nullptr;  // pointer of current head
+  Chunk_pointer tail_chunk = nullptr;  // pointer of current tail
+
+  DequeBody() noexcept : body(), head_chunk(), tail_chunk() {
+  }
+  DequeBody(const DequeBody&) = default;
+  DequeBody& operator=(const DequeBody&) = default;
+  DequeBody(DequeBody&& dqb) noexcept : DequeBody(dqb) {
+    dqb = DequeBody();
+  }
+  void exchange_data(DequeBody& dqb) noexcept {
+    std::swap(*this, dqb);
+  }
+  void stretch_left_end(const size_t& new_len);
+  void stretch_right_end(const size_t& new_len);
+  // function for reallocation memory for unit monipulation
+};
+//===========================================
+
 //=================ITERATOR==================
 template <typename TempT, typename Alloc>
 template <bool IsConst>
@@ -663,8 +697,7 @@ void Deque<TempT, Alloc>::body_range_construction(Chunk_pointer head,
   Chunk_pointer cur_ptr = nullptr;
   Chunk_alloc_type chunk_allocator = get_chunk_allocator();
   try {
-    Chunk_alloc_traits::construct(chunk_allocator, head, true);
-    for (cur_ptr = ++head; cur_ptr <= tail; ++cur_ptr) {
+    for (cur_ptr = head; cur_ptr <= tail; ++cur_ptr) {
       Chunk_alloc_traits::construct(chunk_allocator, cur_ptr, false);
     }
   } catch (...) {
@@ -683,9 +716,10 @@ void Deque<TempT, Alloc>::body_range_destruction(Chunk_pointer head,
   }
 }
 template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::allocation_attempt_of_deque_body() {
+void Deque<TempT, Alloc>::allocation_attempt_of_deque_body(
+    Chunk_pointer& ptr, const uint64_t& size) {
   try {
-    mc_body_.body = body_allocation(mc_body_.num_of_chunks);
+    ptr = body_allocation(size);
   } catch (...) {
     throw;
     // did not allocate memory for body of deque but have not any meaning
@@ -693,13 +727,14 @@ void Deque<TempT, Alloc>::allocation_attempt_of_deque_body() {
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::constrcution_attempt_of_deque_body(
-    Chunk_pointer& ptr_head_chunk, Chunk_pointer& ptr_tail_chunk) {
+    Chunk_pointer& ptr_head_chunk, Chunk_pointer& ptr_tail_chunk,
+    Chunk_pointer& ptr_body, uint64_t& size) {
   try {
     body_range_construction(ptr_head_chunk, ptr_tail_chunk);
   } catch (...) {
-    body_dealocation(mc_body_.body, mc_body_.num_of_chunks);
-    mc_body_.body = nullptr;
-    mc_body_.num_of_chunks = 0;
+    body_dealocation(ptr_body, size);
+    ptr_body = nullptr;
+    size = 0;
     throw;
     // did not allocate memory for chunks
   }
@@ -712,21 +747,61 @@ void Deque<TempT, Alloc>::reserve_memory_in_deque(
   mc_body_.total_size = num_of_units;
   mc_body_.num_of_chunks = std::max(
       kDefaultDequeLenth, static_cast<uint64_t>(required_amount_of_chunks + 2));
-  allocation_attempt_of_deque_body();
+  allocation_attempt_of_deque_body(mc_body_.body, mc_body_.num_of_chunks);
   // will try allocate memory for deque body
   Chunk_pointer ptr_head_chunk =
       (mc_body_.body +
        ((mc_body_.num_of_chunks - required_amount_of_chunks) / 2));
   Chunk_pointer ptr_tail_chunk =
       mc_body_.head_chunk + required_amount_of_chunks - 1;
-  constrcution_attempt_of_deque_body(ptr_head_chunk, ptr_tail_chunk);
+  constrcution_attempt_of_deque_body(ptr_head_chunk, ptr_tail_chunk,
+                                     mc_body_.body, mc_body_.num_of_chunks);
   // will try allocate memory for chunks in the deque
   mc_body_.head_chunk = ptr_head_chunk;
   mc_body_.tail_chunk = ptr_tail_chunk;
   // there seems to be no sin
 }
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::DequeBody::stretch_right_end(const size_t& new_len) {
+  Chunk_alloc_type chunk_allocator = get_chunk_allocator();
+  Chunk_pointer new_body = nullptr;
+  uint64_t new_num_of_chunks = num_of_chunks * 2;
+  allocation_attempt_of_deque_body(new_body, new_num_of_chunks);
+  constrcution_attempt_of_deque_body(new_body + num_of_chunks,
+                                     new_body + 2 * num_of_chunks - 1, new_body,
+                                     new_num_of_chunks);
+  size_t idx = 0;
+  try {
+    for (idx = 0; idx < num_of_chunks; ++idx) {
+      Chunk_alloc_traits::construct(chunk_allocator, new_body + idx,
+                                    std::move_if_noexcept(body + idx));
+    }
+  } catch (...) {
+    for (size_t i = 0; i < idx; ++i) {
+      Chunk_alloc_traits::destroy(chunk_allocator, new_body + i);
+    }
+    body_range_destruction(new_body + num_of_chunks,
+                           new_body + 2 * num_of_chunks - 1);
+    body_deallocation(new_body, num_of_chunks);
+    throw;
+    // did not moved part from old body
+  }
+  num_of_chunks *= 2;
+  head_chunk = new_body + (head_chunk - body);
+  tail_chunk = new_body + (tail_chunk - body);
+  body = std::move(new_body);
+}
 //===========================================
 //======Functions for unit monipulations=====
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::priv_push_back(TempT&& elem) {
+  if (mc_body_.tail_chunk - mc_body_.body + 1 == mc_body_.num_of_chunks) {
+    if (mc_body_.tail_chunk->chunk_tail_ ==
+        mc_body_.tail_chunk->r_chunk_confine_) {
+      // it means that in this direction have not any capacity
+    }
+  }
+}
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::priv_pop_back() noexcept {
   mc_body_.tail_chunk->right_pop_chunk();
@@ -749,29 +824,6 @@ void Deque<TempT, Alloc>::priv_pop_front() noexcept {
     tmp_ptr = nullptr;
   }
 }
-//===========================================
-
-//==============Deque Body===================
-template <typename TempT, typename Alloc>
-struct Deque<TempT, Alloc>::DequeBody {
-  uint64_t total_size = 0;             // size of in full container
-  uint64_t num_of_chunks = 0;          // how many chunks have a container
-  Chunk_pointer body = nullptr;        // pointer of full deque. the end is just
-                                       // body plus size
-  Chunk_pointer head_chunk = nullptr;  // pointer of current head
-  Chunk_pointer tail_chunk = nullptr;  // pointer of current tail
-
-  DequeBody() noexcept : body(), head_chunk(), tail_chunk() {
-  }
-  DequeBody(const DequeBody&) = default;
-  DequeBody& operator=(const DequeBody&) = default;
-  DequeBody(DequeBody&& dqb) noexcept : DequeBody(dqb) {
-    dqb = DequeBody();
-  }
-  void exchange_data(DequeBody& dqb) noexcept {
-    std::swap(*this, dqb);
-  }
-};
 //===========================================
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -865,9 +917,7 @@ const TempT& Deque<TempT, Alloc>::back() const noexcept {
 //==============SizeInformation==============
 template <typename TempT, typename Alloc>
 size_t Deque<TempT, Alloc>::size() const noexcept {
-  return static_cast<size_t>(
-      iterator(mc_body_.tail_chunk->chunk_tail, mc_body_.tail_chunk) -
-      iterator(mc_body_.head_chunk->chunk_head, mc_body_.head_chunk));
+  return static_cast<size_t>(end() - begin());
 }
 template <typename TempT, typename Alloc>
 bool Deque<TempT, Alloc>::empty() const noexcept {
