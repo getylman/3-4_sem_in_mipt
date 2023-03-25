@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 23.03.2023
+ * @date 25.03.2023
  */
 
 /*
@@ -516,7 +516,9 @@ class Deque<TempT, Alloc>::Chunk {
         Alloc_traits::destroy(all_tp_, chunk_body_ + i);
       }
     }
-    Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    if (chunk_body != nullptr) {
+      Alloc_traits::deallocate(all_tp_, chunk_body_, ChunkRank);
+    }
     chunk_body_ = chunk_head_ = chunk_tail_ = r_chunk_confine_ =
         l_chunk_confine_ = nullptr;
     chunk_size_ = 0;
