@@ -95,6 +95,9 @@ class Deque {
   void push_front(const TempT& elem);
   void push_front(TempT&& elem);
   void pop_front() noexcept;
+  iterator insert(const_iterator pos, const TempT& value);
+  iterator insert(const_iterator pos, TempT&& value);
+  iterator erase(const_iterator pos);
   //==============================================
   //================Iterator methods==============
   iterator begin() noexcept;
@@ -993,6 +996,88 @@ bool Deque<TempT, Alloc>::empty() const noexcept {
 }
 //***********************************************
 
+//*************Modification methods**************
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::pop_back() noexcept {
+  body_.db_pop_back();
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::pop_front() noexcept {
+  body_.db_pop_front();
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::push_back(const TempT& elem) {
+  if (body_.db_body_costructed()) {
+    body_.db_push_back(elem);
+  } else {
+    *this = std::move(Deque(1, elem));
+  }
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::push_front(const TempT& elem) {
+  if (body_.db_body_costructed()) {
+    body_.db_push_front(elem);
+  } else {
+    *this = std::move(Deque(1, elem));
+  }
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::push_back(TempT&& elem) {
+  if (body_.db_body_costructed()) {
+    body_.db_push_back(std::move_if_noexcept(elem));
+  } else {
+    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
+  }
+}
+template <typename TempT, typename Alloc>
+void Deque<TempT, Alloc>::push_front(TempT&& elem) {
+  if (body_.db_body_costructed()) {
+    body_.db_push_front(std::move_if_noexcept(elem));
+  } else {
+    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
+  }
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::insert(Deque<TempT, Alloc>::const_iterator pos, const TempT& value) {
+  push_back(value);
+  // тут не нужен try catch тк внутри пушбека уже все сделано
+  const size_t index = pos - begin();
+  if (index + 1 == size()) {
+    return end() - 1;
+  }
+  for (size_t i = size() - 1; i > index; ++i) {
+    std::swap(operator[](i), operator[](i - 1));
+  }
+  return begin() + index;
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::insert(Deque<TempT, Alloc>::const_iterator pos, TempT&& value) {
+  push_back(std::move_if_noexcept(value));
+  // тут не нужен try catch тк внутри пушбека уже все сделано
+  const size_t index = pos - begin();
+  if (index + 1 == size()) {
+    return end() - 1;
+  }
+  for (size_t i = size() - 1; i > index; ++i) {
+    std::swap(operator[](i), operator[](i - 1));
+  }
+  return begin() + index;
+}
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::erase(Deque<TempT, Alloc>::const_iterator pos) {
+  const size_t index = pos - begin();
+  if (index + 1 == size()) {
+    pop_back();
+    return end();
+  }
+  for (size_t i = index + 1; i < size(); ++i) {
+    std::swap(operator[](i), operator[](i - 1));
+  }
+  pop_back();
+  return begin() + index + 1;
+}
+//***********************************************
+
 //***************Iterator methods****************
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::begin() noexcept {
@@ -1073,46 +1158,5 @@ Deque<TempT, Alloc>::crend() const noexcept {
   return const_reverse_iterator((begin() - 1));
 }
 //***********************************************
-//*************Modification methods**************
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::pop_back() noexcept {
-  body_.db_pop_back();
-}
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::pop_front() noexcept {
-  body_.db_pop_front();
-}
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::push_back(const TempT& elem) {
-  if (body_.db_body_costructed()) {
-    body_.db_push_back(elem);
-  } else {
-    *this = std::move(Deque(1, elem));
-  }
-}
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::push_front(const TempT& elem) {
-  if (body_.db_body_costructed()) {
-    body_.db_push_front(elem);
-  } else {
-    *this = std::move(Deque(1, elem));
-  }
-}
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::push_back(TempT&& elem) {
-  if (body_.db_body_costructed()) {
-    body_.db_push_back(std::move_if_noexcept(elem));
-  } else {
-    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
-  }
-}
-template <typename TempT, typename Alloc>
-void Deque<TempT, Alloc>::push_front(TempT&& elem) {
-  if (body_.db_body_costructed()) {
-    body_.db_push_front(std::move_if_noexcept(elem));
-  } else {
-    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
-  }
-}
-//***********************************************
+
 //===============================================
