@@ -38,7 +38,7 @@ class Deque {
   // const uint64_t kChunkSize = 512;  // size of chunks
   //                                   // I cannot explane why 512
   static constexpr const uint64_t set_chunk_rank() noexcept {
-    const uint64_t kChunkRank = 1;
+    const uint64_t kChunkRank = 512;
     return kChunkRank;
   }  // function to set a rank for chunk
   // static constexpr const uint64_t set_chunk_rank(
@@ -65,15 +65,13 @@ class Deque {
                  const Alloc& alloc = Alloc());
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque(const Deque<TempT, AnotherAlloc>& deq);
-  template <typename AnotherAlloc = std::allocator<TempT>>
-  Deque(Deque<TempT, AnotherAlloc>&& deq);
+  Deque(Deque<TempT, Alloc>&& deq);
   ~Deque() noexcept;
   template <typename AnotherAlloc = std::allocator<TempT>>
   Deque<TempT, AnotherAlloc>& operator=(
       const Deque<TempT, AnotherAlloc>& deq) &;
   // will called only for lvalue
-  template <typename AnotherAlloc = std::allocator<TempT>>
-  Deque<TempT, AnotherAlloc>& operator=(Deque<TempT, AnotherAlloc>&& deq) &&;
+  Deque<TempT, Alloc>& operator=(Deque<TempT, Alloc>&& deq) & noexcept;
   // will called only for rvalue
   //==============================================
   //=============Accessing an element=============
@@ -171,10 +169,8 @@ class Deque<TempT, Alloc>::Chunk {
       throw;
     }
   }  // tring to copy from src to dst chunk
-  void construct_unit_attempt_of_chunk(
-      pointer& ptr, const TempT& value,
-      int16_t&
-          changing_delta) {
+  void construct_unit_attempt_of_chunk(pointer& ptr, const TempT& value,
+                                       int16_t& changing_delta) {
     if (chunk_size_ != 0) {
       ptr += changing_delta;
     }
@@ -191,10 +187,8 @@ class Deque<TempT, Alloc>::Chunk {
     }
     ++chunk_size_;
   }
-  void construct_unit_attempt_of_chunk(
-      pointer& ptr, TempT&& value,
-      int16_t&
-          changing_delta) {
+  void construct_unit_attempt_of_chunk(pointer& ptr, TempT&& value,
+                                       int16_t& changing_delta) {
     if (chunk_size_ != 0) {
       ptr += changing_delta;
     }
@@ -613,15 +607,16 @@ struct Deque<TempT, Alloc>::DequeBody {
   // ##****
   // ******
   // --------------------------------
-  size_t using_len = 0;
+  // size_t using_len = 0;
   size_t id_start_ = 0;
   size_t id_finish_ = 0;
+  std::vector<Chunk> vec_of_chunks_;
   //******************************************
   //*************Private Functions************
   //```````````Functions in Constructor```````
   void db_allocation_attempt(const size_t count) {
     try {
-      vec_of_chunks.resize(count);
+      vec_of_chunks_.resize(count);
     } catch (...) {
       throw;
     }
@@ -630,14 +625,14 @@ struct Deque<TempT, Alloc>::DequeBody {
     size_t idx = 0;
     try {
       for (; idx < full_size / 2; ++idx) {
-        vec_of_chunks[idx] = std::move(Chunk(true));
+        vec_of_chunks_[idx] = std::move(Chunk(true));
       }
       for (; idx < full_size; ++idx) {
-        vec_of_chunks[idx] = std::move(Chunk(false));
+        vec_of_chunks_[idx] = std::move(Chunk(false));
       }
     } catch (...) {
       for (size_t i = 0; i < idx; ++i) {
-        vec_of_chunks[i].~Chunk();
+        vec_of_chunks_[i].~Chunk();
       }
       throw;
     }
@@ -675,7 +670,7 @@ struct Deque<TempT, Alloc>::DequeBody {
       db_filling_attempt_r(value, full_size - half_of_count);
     } catch (...) {
       for (size_t i = 0; i < full_size; ++i) {
-        vec_of_chunks[i].~Chunk();
+        vec_of_chunks_[i].~Chunk();
       }
       id_finish_ = id_start_ = 0;
       throw;
@@ -684,40 +679,40 @@ struct Deque<TempT, Alloc>::DequeBody {
   //``````````````````````````````````````````
   //```````Functions for pushing units````````
   void db_reallocation_attempt_l(const size_t& new_size) {
-    const size_t old_size = vec_of_chunks.size();
+    const size_t old_size = vec_of_chunks_.size();
     try {
-      vec_of_chunks.resize(new_size);
+      vec_of_chunks_.resize(new_size);
     } catch (...) {
       throw;
     }
     try {
-      for (size_t i = old_size; i < vec_of_chunks.size(); ++i) {
-        vec_of_chunks[i] = std::move(Chunk(true));
+      for (size_t i = old_size; i < vec_of_chunks_.size(); ++i) {
+        vec_of_chunks_[i] = std::move(Chunk(true));
       }
     } catch (...) {
-      vec_of_chunks.resize(old_size);
+      vec_of_chunks_.resize(old_size);
       throw;
     }
     const size_t delta = new_size - old_size;
     for (size_t i = old_size - 1; i < new_size; --i) {
-      std::swap(vec_of_chunks[delta + i], vec_of_chunks[i]);
+      std::swap(vec_of_chunks_[delta + i], vec_of_chunks_[i]);
     }
     id_finish_ += delta;
     id_start_ += delta;
   }
   void db_reallocation_attempt_r(const size_t& new_size) {
-    const size_t old_size = vec_of_chunks.size();
+    const size_t old_size = vec_of_chunks_.size();
     try {
-      vec_of_chunks.resize(new_size);
+      vec_of_chunks_.resize(new_size);
     } catch (...) {
       throw;
     }
     try {
-      for (size_t i = old_size; i < vec_of_chunks.size(); ++i) {
-        vec_of_chunks[i] = std::move(Chunk(false));
+      for (size_t i = old_size; i < vec_of_chunks_.size(); ++i) {
+        vec_of_chunks_[i] = std::move(Chunk(false));
       }
     } catch (...) {
-      vec_of_chunks.resize(old_size);
+      vec_of_chunks_.resize(old_size);
       throw;
     }
   }
@@ -725,7 +720,6 @@ struct Deque<TempT, Alloc>::DequeBody {
   //******************************************
 
  public:
-  std::vector<Chunk> vec_of_chunks;
   //*************Constructors****************
   DequeBody() = default;
 
@@ -737,45 +731,77 @@ struct Deque<TempT, Alloc>::DequeBody {
     id_start_ = full_size / 2 - 1;
     id_finish_ = full_size / 2;
     db_filling_attempt(value, count);
-    using_len = full_size - 2;
+    // using_len = full_size - 2;
+  }
+
+  DequeBody(const DequeBody& db_copy)
+      : vec_of_chunks_(db_copy.vec_of_chunks_),
+        id_start_(db_copy.id_start_),
+        id_finish_(db_copy.id_finish_) {
+  }
+
+  DequeBody& operator=(const DequeBody& db_copy) & {
+    vec_of_chunks_ = db_copy.vec_of_chunks_;
+    id_start_ = db_copy.id_start_;
+    id_finish_ = db_copy.id_finish_;
+    return *this;
+  }
+
+  DequeBody& operator=(DequeBody&& db_copy) & noexcept {
+    vec_of_chunks_ = std::move(db_copy.vec_of_chunks_);
+    db_copy.vec_of_chunks_ = std::move(DequeBody().vec_of_chunks_);
+    id_finish_ = db_copy.id_finish_;
+    id_start_ = db_copy.id_start_;
+    db_copy.id_finish_ = db_copy.id_start_ = 0;
+    return *this;
+  }
+
+  DequeBody(DequeBody&& db_copy)
+      : vec_of_chunks_(std::move(db_copy.vec_of_chunks_)),
+        id_start_(std::move(db_copy.id_start_)),
+        id_finish_(std::move(db_copy.id_finish_)) {
+    db_copy = std::move(DequeBody());
   }
 
   ~DequeBody() noexcept {
-    for (size_t i = 0; i < vec_of_chunks.size(); ++i) {
-      vec_of_chunks[i].~Chunk();
+    for (size_t i = 0; i < vec_of_chunks_.size(); ++i) {
+      vec_of_chunks_[i].~Chunk();
     }
-    id_finish_ = id_start_ = using_len = 0;
+    id_finish_ = id_start_ = 0;  // using_len = 0;
   }
   //******************************************
   //****************Getters*******************
   Chunk& get_head() noexcept {
-    return vec_of_chunks[id_start_];
+    return vec_of_chunks_[id_start_];
   }
   const Chunk& get_head() const noexcept {
-    return vec_of_chunks[id_start_];
+    return vec_of_chunks_[id_start_];
   }
   Chunk& get_tail() noexcept {
-    return vec_of_chunks[id_finish_];
+    return vec_of_chunks_[id_finish_];
   }
   const Chunk& get_tail() const noexcept {
-    return vec_of_chunks[id_finish_];
+    return vec_of_chunks_[id_finish_];
   }
   Chunk& operator[](const size_t& index) noexcept {
-    return vec_of_chunks[id_start_ + index];
+    return vec_of_chunks_[id_start_ + index];
+  }
+  bool db_body_costructed() const noexcept {
+    return !vec_of_chunks_.empty();
   }
   //******************************************
   //***************Unit Changes***************
   void db_push_front(const TempT& value) {
-    if (vec_of_chunks[id_start_].chunk_full()) {
+    if (vec_of_chunks_[id_start_].chunk_full()) {
       if (id_start_ == 0) {
-        db_reallocation_attempt_l(vec_of_chunks.size() * 2);
+        db_reallocation_attempt_l(vec_of_chunks_.size() * 2);
       }
       --id_start_;
     }
     try {
-      vec_of_chunks[id_start_].left_set_chunk(value);
+      vec_of_chunks_[id_start_].left_set_chunk(value);
     } catch (...) {
-      if (vec_of_chunks[id_start_].chunk_empty()) {
+      if (vec_of_chunks_[id_start_].chunk_empty()) {
         ++id_start_;
         // не буду деалоцировать обратно при выкидывании исключения не вижу
         // смысла тк рано или поздно снова придется реалоуировать память
@@ -784,16 +810,16 @@ struct Deque<TempT, Alloc>::DequeBody {
     }
   }
   void db_push_front(TempT&& value) {
-    if (vec_of_chunks[id_start_].chunk_full()) {
+    if (vec_of_chunks_[id_start_].chunk_full()) {
       if (id_start_ == 0) {
-        db_reallocation_attempt_l(vec_of_chunks.size() * 2);
+        db_reallocation_attempt_l(vec_of_chunks_.size() * 2);
       }
       --id_start_;
     }
     try {
-      vec_of_chunks[id_start_].left_set_chunk(std::move_if_noexcept(value));
+      vec_of_chunks_[id_start_].left_set_chunk(std::move_if_noexcept(value));
     } catch (...) {
-      if (vec_of_chunks[id_start_].chunk_empty()) {
+      if (vec_of_chunks_[id_start_].chunk_empty()) {
         ++id_start_;
         // не буду деалоцировать обратно при выкидывании исключения не вижу
         // смысла тк рано или поздно снова придется реалоуировать память
@@ -802,16 +828,16 @@ struct Deque<TempT, Alloc>::DequeBody {
     }
   }
   void db_push_back(const TempT& value) {
-    if (vec_of_chunks[id_finish_].chunk_full()) {
-      if (id_finish_ == vec_of_chunks.size() - 1) {
-        db_reallocation_attempt_r(vec_of_chunks.size() * 2);
+    if (vec_of_chunks_[id_finish_].chunk_full()) {
+      if (id_finish_ == vec_of_chunks_.size() - 1) {
+        db_reallocation_attempt_r(vec_of_chunks_.size() * 2);
       }
       ++id_finish_;
     }
     try {
-      vec_of_chunks[id_finish_].right_set_chunk(value);
+      vec_of_chunks_[id_finish_].right_set_chunk(value);
     } catch (...) {
-      if (vec_of_chunks[id_finish_].chunk_empty()) {
+      if (vec_of_chunks_[id_finish_].chunk_empty()) {
         --id_finish_;
         // не буду деалоцировать обратно при выкидывании исключения не вижу
         // смысла тк рано или поздно снова придется реалоуировать память
@@ -820,16 +846,16 @@ struct Deque<TempT, Alloc>::DequeBody {
     }
   }
   void db_push_back(TempT&& value) {
-    if (vec_of_chunks[id_finish_].chunk_full()) {
-      if (id_finish_ == vec_of_chunks.size() - 1) {
-        db_reallocation_attempt_r(vec_of_chunks.size() * 2);
+    if (vec_of_chunks_[id_finish_].chunk_full()) {
+      if (id_finish_ == vec_of_chunks_.size() - 1) {
+        db_reallocation_attempt_r(vec_of_chunks_.size() * 2);
       }
       ++id_finish_;
     }
     try {
-      vec_of_chunks[id_finish_].right_set_chunk(std::move_if_noexcept(value));
-    }  catch (...) {
-      if (vec_of_chunks[id_finish_].chunk_empty()) {
+      vec_of_chunks_[id_finish_].right_set_chunk(std::move_if_noexcept(value));
+    } catch (...) {
+      if (vec_of_chunks_[id_finish_].chunk_empty()) {
         --id_finish_;
         // не буду деалоцировать обратно при выкидывании исключения не вижу
         // смысла тк рано или поздно снова придется реалоуировать память
@@ -838,16 +864,16 @@ struct Deque<TempT, Alloc>::DequeBody {
     }
   }
   void db_pop_front() noexcept {
-    if (vec_of_chunks[id_start_].chunk_empty()) {
+    vec_of_chunks_[id_start_].left_pop_chunk();
+    if (vec_of_chunks_[id_start_].chunk_empty()) {
       ++id_start_;
     }
-    vec_of_chunks[id_start_].left_pop_chunk();
   }
   void db_pop_back() noexcept {
-    if (vec_of_chunks[id_finish_].chunk_empty()) {
+    vec_of_chunks_[id_finish_].right_pop_chunk();
+    if (vec_of_chunks_[id_finish_].chunk_empty()) {
       --id_finish_;
     }
-    vec_of_chunks[id_finish_].right_pop_chunk();
   }
   //******************************************
 };
@@ -868,6 +894,28 @@ Deque<TempT, Alloc>::Deque(const size_t& count, const TempT& value,
                            const Alloc& alloc)
     : body_(count, value) {
 }
+
+template <typename TempT, typename Alloc>
+template <typename AnotherAlloc>
+Deque<TempT, Alloc>::Deque(const Deque<TempT, AnotherAlloc>& deq) : body_(deq.body_) {}
+
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>::Deque(Deque<TempT, Alloc>&& deq) : body_(std::move(deq.body_)) {}
+
+template <typename TempT, typename Alloc>
+template <typename AnotherAlloc>
+Deque<TempT, AnotherAlloc>& Deque<TempT, Alloc>::operator=(const Deque<TempT, AnotherAlloc>& deq) & {
+  body_ = deq.body_;
+  return *this;
+}
+
+template <typename TempT, typename Alloc>
+Deque<TempT, Alloc>& Deque<TempT, Alloc>::operator=(Deque<TempT, Alloc>&& deq) & noexcept {
+  body_ = std::move(deq.body_);
+  deq.body_ = std::move(Deque<TempT, Alloc>().body_);
+  return *this;
+}
+
 template <typename TempT, typename Alloc>
 Deque<TempT, Alloc>::~Deque() noexcept {
   //  body_.~DequeBody();
@@ -934,7 +982,10 @@ const TempT& Deque<TempT, Alloc>::back() const noexcept {
 //***************SizeInformation*****************
 template <typename TempT, typename Alloc>
 size_t Deque<TempT, Alloc>::size() const noexcept {
-  return static_cast<size_t>(end() - begin());
+  const_iterator finish = end();
+  const_iterator start = begin();
+  size_t res = (finish <= start) ? 0 : static_cast<size_t>(finish - start);
+  return res;
 }
 template <typename TempT, typename Alloc>
 bool Deque<TempT, Alloc>::empty() const noexcept {
@@ -1033,19 +1084,35 @@ void Deque<TempT, Alloc>::pop_front() noexcept {
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_back(const TempT& elem) {
-  body_.db_push_back(elem);
+  if (body_.db_body_costructed()) {
+    body_.db_push_back(elem);
+  } else {
+    *this = std::move(Deque(1, elem));
+  }
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_front(const TempT& elem) {
-  body_.db_push_front(elem);
+  if (body_.db_body_costructed()) {
+    body_.db_push_front(elem);
+  } else {
+    *this = std::move(Deque(1, elem));
+  }
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_back(TempT&& elem) {
-  body_.db_push_back(std::move_if_noexcept(elem));
+  if (body_.db_body_costructed()) {
+    body_.db_push_back(std::move_if_noexcept(elem));
+  } else {
+    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
+  }
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_front(TempT&& elem) {
-  body_.db_push_front(std::move_if_noexcept(elem));
+  if (body_.db_body_costructed()) {
+    body_.db_push_front(std::move_if_noexcept(elem));
+  } else {
+    *this = std::move(Deque(1, std::move_if_noexcept(elem)));
+  }
 }
 //***********************************************
 //===============================================
