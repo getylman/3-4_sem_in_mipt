@@ -1,14 +1,3 @@
-/**
- * @file deque.hpp
- * @author getylman
- * @date 28.03.2023
- */
-
-/*
- * Я ЗАПРЕЩАЮ КОМУ ЛИБО МЕНЬ РАНГ ДЕКА
- * ПРОБЛЕМЫ НА ВАЩУ СОВЕСТЬ
- */
-
 #pragma once
 #include <iterator>
 #include <memory>
@@ -49,7 +38,7 @@ class Deque {
   // const uint64_t kChunkSize = 512;  // size of chunks
   //                                   // I cannot explane why 512
   static constexpr const uint64_t set_chunk_rank() noexcept {
-    const uint64_t kChunkRank = 4;
+    const uint64_t kChunkRank = 1;
     return kChunkRank;
   }  // function to set a rank for chunk
   // static constexpr const uint64_t set_chunk_rank(
@@ -711,7 +700,7 @@ struct Deque<TempT, Alloc>::DequeBody {
     }
     const size_t delta = new_size - old_size;
     for (size_t i = old_size - 1; i < new_size; --i) {
-      std::swap(vec_of_chunks[delta + i], vec_of_chunks[delta + new_size - 1]);
+      std::swap(vec_of_chunks[delta + i], vec_of_chunks[i]);
     }
     id_finish_ += delta;
     id_start_ += delta;
