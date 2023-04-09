@@ -345,21 +345,55 @@ struct List<TempT, Alloc>::ListBody {
     Node* pos_cur_node = pos.cur_node_;
     pos_prev_node->node_set_next_neighbour(pos_next_node);
     pos_next_node->node_set_prev_neighbour(pos_prev_node);
-    node_alloc_traits::destroy(lb_get_node_allocator(), pos_cur_node);
-    lb_node_deallocate(pos_cur_node);
+    if (pos_cur_node != nullptr) {
+      node_alloc_traits::destroy(lb_get_node_allocator(), pos_cur_node);
+      lb_node_deallocate(pos_cur_node);
+    }
   }
   //****************************************
   //*************Range Functions************
+  void lb_range_poper(const size_t idx) noexcept {
+    for (size_t i = 0; i < idx; ++i) {
+      lb_pop_back();
+    }
+  }
+  // if have been throwen exception it clean all and throw furthen
+  // the exception
   void lb_range_defaultly_init(const size_t& len) {
-    for (size_t i = 0; i < len; ++i) {
-      lb_emplace_back();
+    size_t idx = 0;
+    try {
+      for (; idx < len; ++idx) {
+        lb_emplace_back();
+      }
+    } catch (...) {
+      lb_range_poper(idx);
+      throw;
     }
   }  // construct list with default value
   void lb_range_fill_init(const size_t& len, const TempT& value) {
-    for (size_t i = 0; i < len; ++i) {
-      lb_push_back(value);
+    size_t idx = 0;
+    try {
+      for (; idx < len; ++idx) {
+        lb_push_back(value);
+      }
+    } catch (...) {
+      lb_range_poper(idx);
+      throw;
     }
   }  // len times push_back into list
+  template <typename Iter>
+  void lb_range_copy_init(Iter start, Iter finish) {
+    size_t idx = 0;
+    try {
+      for (; start != finish; ++start) {
+        lb_emplace_back(*start);
+        ++idx;
+      }
+    } catch (...) {
+      lb_range_poper(idx);
+      throw;
+    }
+  }  // to init list by two iterators
   //****************************************
  public:
   //**************Constructors**************
@@ -373,6 +407,21 @@ struct List<TempT, Alloc>::ListBody {
            const allocator_type& alr = allocator_type())
       : node_alloc_(node_alloc_type(alr)) {
     lb_range_fill_init(len, value);
+  }
+  ListBody(ListBody&& other) = default;
+  ListBody(const ListBody& other)
+      : node_alloc_(node_alloc_traits::select_on_container_copy_construction(
+            other.lb_get_node_allocator())) {
+    lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
+  }
+  ListBody(const ListBody& other, const allocator_type& alr)
+      : node_alloc_(node_alloc_type(alr)) {
+    lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
+  }
+  ListBody(std::initializer_list<TempT> init_l,
+           const allocator_type& alr = allocator_type())
+      : node_alloc_(node_alloc_type(alr)) {
+    lb_range_copy_init(init_l.begin(), init_l.end());
   }
 
   //****************************************
