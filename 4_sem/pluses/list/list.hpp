@@ -44,6 +44,8 @@ class List {
   //=================Usings=================
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
+  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
+  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
   //========================================
   //==============Constructors==============
   List();
@@ -74,6 +76,20 @@ class List {
   void push_back(TempT&& value);
   void push_front(const TempT& value);
   void push_front(TempT&& value);
+  //========================================
+  //===========Iterator Methods=============
+  iterator begin() noexcept;
+  const_iterator begin() const noexcept;
+  const_iterator cbegin() const noexcept;
+  iterator end() noexcept;
+  const_iterator end() const noexcept;
+  const_iterator cend() const noexcept;
+  reverse_iterator rbegin() noexcept;
+  const_reverse_iterator rbegin() const noexcept;
+  const_reverse_iterator crbegin() const noexcept;
+  reverse_iterator rend() noexcept;
+  const_reverse_iterator rend() const noexcept;
+  const_reverse_iterator crend() const noexcept;
   //========================================
 };
 
@@ -408,7 +424,7 @@ struct List<TempT, Alloc>::ListBody {
       : node_alloc_(node_alloc_type(alr)) {
     lb_range_fill_init(len, value);
   }
-  ListBody(ListBody&& other) = default;
+  // ListBody(ListBody&& other) = default; make normal
   ListBody(const ListBody& other)
       : node_alloc_(node_alloc_traits::select_on_container_copy_construction(
             other.lb_get_node_allocator())) {
@@ -423,8 +439,12 @@ struct List<TempT, Alloc>::ListBody {
       : node_alloc_(node_alloc_type(alr)) {
     lb_range_copy_init(init_l.begin(), init_l.end());
   }
+  ~ListBody() { lb_clear(); }
 
   //****************************************
+  //*****************Capacity***************
+  size_t lb_size() const noexcept { return size_; }
+  bool lb_empty() const noexcept { return size_ == 0; }
   //****************Modifiers***************
   void lb_push_back(const TempT& value) {
     lb_insert(iterator(tail_node_), value);
@@ -450,6 +470,141 @@ struct List<TempT, Alloc>::ListBody {
     lb_erase(iterator(tail_node_->get_prev_neighbour()));
   }
   void lb_pop_front() noexcept { lb_erase(iterator(head_node_)); }
+  void lb_clear() noexcept {
+    while (!lb_empty()) {
+      pop_back();
+    }
+  }
+  //****************************************
+  //*****************Getters****************
+  Node* lb_get_head_node() const noexcept { return head_node_; }
+  Node* lb_get_head_node() noexcept { return head_node_; }
+  Node* lb_get_tail_node() const noexcept { return tail_node_; }
+  Node* lb_get_tail_node() noexcept { return tail_node_; }
   //****************************************
 };
 //==========================================
+
+//^^^^^^^^^^^^^^^^^^List^^^^^^^^^^^^^^^^^^^^
+//===============Constructors===============
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::List() : list_body_() {}
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::List(const size_t& count, const TempT& value,
+                         const Alloc& alloc = Alloc())
+    : list_body_(count, value, alloc) {}
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::List(const size_t& count, const Alloc& alloc = Alloc())
+    : list_body_(count, alloc) {}
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::List(const List& other) : list_body_(other.list_body_) {}
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::List(std::initializer_list<TempT> init,
+                         const Alloc& alloc = std::allocator<TempT>())
+    : list_body_(init, alloc) {}
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>::~List() = default;
+//==========================================
+//=================Capacity=================
+template <typename TempT, typename Alloc>
+size_t List<TempT, Alloc>::size() const noexcept {
+  return list_body_.lb_size();
+}
+template <typename TempT, typename Alloc>
+bool List<TempT, Alloc>::empty() const noexcept {
+  return list_body_.lb_empty();
+}
+//==========================================
+//=================Modifiers================
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::pop_back() noexcept { list_body_.lb_pop_back(); }
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::pop_front() noexcept { list_body_.lb_pop_front(); }
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::push_back(const TempT& value) {
+  list_body_.lb_push_back(value);
+}
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::push_back(TempT&& value) {
+  list_body_.lb_push_back(std::move_if_noexcept(value));
+}
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::push_front(const TempT& value) {
+  list_body_.lb_push_front(value);
+}
+template <typename TempT, typename Alloc>
+void List<TempT, Alloc>::push_front(TempT&& value) {
+  list_body_.lb_push_front(std::move_if_noexcept(value));
+}
+//==========================================
+//=============Iterator Methods=============
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::iterator List<TempT, Alloc>::begin() noexcept {
+  return typename List<TempT, Alloc>::iterator(list_body_.lb_get_head_node());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::begin()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_iterator(
+      list_body_.lb_get_head_node());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::cbegin()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_iterator(
+      list_body_.lb_get_head_node());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::iterator List<TempT, Alloc>::end() noexcept {
+  return typename List<TempT, Alloc>::iterator(list_body_.lb_get_tail_node());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::end()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_iterator(
+      list_body_.lb_get_tail_node());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::cend()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_iterator(
+      list_body_.lb_get_tail_node());
+}
+
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::reverse_iterator
+List<TempT, Alloc>::rbegin() noexcept {
+  return typename List<TempT, Alloc>::reverse_iterator(end());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_reverse_iterator List<TempT, Alloc>::rbegin()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_reverse_iterator(end());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_reverse_iterator
+List<TempT, Alloc>::crbegin() const noexcept {
+  return typename List<TempT, Alloc>::const_reverse_iterator(end());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::reverse_iterator
+List<TempT, Alloc>::rend() noexcept {
+  return typename List<TempT, Alloc>::reverse_iterator(begin());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_reverse_iterator List<TempT, Alloc>::rend()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_reverse_iterator(begin());
+}
+template <typename TempT, typename Alloc>
+typename List<TempT, Alloc>::const_reverse_iterator List<TempT, Alloc>::crend()
+    const noexcept {
+  return typename List<TempT, Alloc>::const_reverse_iterator(begin());
+}
+//==========================================
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
