@@ -104,6 +104,17 @@ struct List<TempT, Alloc>::Node {
       throw;
     }
   }
+  template <typename... Args>
+  void node_construct_attempt(Args&&... args) {
+    try {
+      type_alloc_traits::construct(type_alloc_, node_body_,
+                                   std::forward<Args>(args)...);
+    } catch (...) {
+      type_alloc_traits::deallocate(type_alloc_, 1);
+      throw;
+    }
+  }
+
   void node_suicide() noexcept {
     if (node_body_ != nullptr) {
       type_alloc_traits::destroy(type_alloc_, node_body_);
@@ -131,6 +142,12 @@ struct List<TempT, Alloc>::Node {
       : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::move_if_noexcept(value));
+  }
+  template <typename... Args>
+  Node(Args&&... ars)
+      : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+    // if throws exception in allocation it will throwen further
+    node_construct_attempt(std::forward<Args>(args)...);
   }
   ~Node() { node_suicide(); }
   Node(const Node& other)
@@ -198,5 +215,139 @@ struct List<TempT, Alloc>::Node {
   Node* next_node_ = nullptr;
   pointer node_body_ = nullptr;
   allocator_type type_alloc_;
+};
+//==========================================
+
+//================Iterator==================
+template <typename TempT, typename Alloc>
+template <bool IsConst>
+class List<TempT, Alloc>::common_iterator {
+  //***************Fields*******************
+  Node* cur_node_;
+  //****************************************
+ public:
+  //***************Usings*******************
+  using difference_type = ptrdiff_t;
+  using value_type = TempT;
+  using reference = TempT&;
+  using pointer = TempT*;
+  using iterator_category = std::bidirectional_iterator_tag;
+  //****************************************
+  //************Constructors****************
+  common_iterator() noexcept : cur_node_() {}
+  explicit common_iterator(const Node* other_node) noexcept
+      : cur_node_(other_node) {}
+  template <bool IsConstTmp>
+  common_iterator(const common_iterator<IsConstTmp>& other) noexcept
+      : cur_node_(other.cur_node_) {}
+  template <bool IsConstTmp>
+  common_iterator<IsConst>& operator=(
+      const common_iterator<IsConstTmp>& other) {
+    cur_node_ = other.cur_node_;
+    return *this;
+  }
+  //****************************************
+  //*********Memory Access Operators********
+  pointer operator->() const noexcept { return &cur_node_->get_body(); }
+  reference operator*() const noexcept { return cur_node_->get_body(); }
+  //****************************************
+  //***********Arithmetic Operators*********
+  common_iterator<IsConst>& operator++() noexcept {
+    cur_node_ = cur_node_->get_next_neighbour();
+    return *this;
+  }
+  common_iterator<IsConst>& operator--() noexcept {
+    cur_node_ = cur_node_->get_prev_neighbour();
+    return *this;
+  }
+  common_iterator<IsConst> operator++(int) noexcept {
+    common_iterator<IsConst> tmp = *this;
+    tmp.cur_node_ = tmp.cur_node_->get_next_neighbour();
+    return *this;
+  }
+  common_iterator<IsConst> operator--(int) noexcept {
+    common_iterator<IsConst> tmp = *this;
+    tmp.cur_node_ = tmp.cur_node_->get_prev_neighbour();
+    return *this;
+  }
+  //****************************************
+  //*********Comparation Operators**********
+  template <bool IsConstTmp>
+  friend bool operator==(const common_iterator<IsConst>& left,
+                         const common_iterator<IsConstTmp>& right) noexcept {
+    return left.cur_node_ == right.cur_node_;
+  }
+  template <bool IsConstTmp>
+  friend bool operator!=(const common_iterator<IsConst>& left,
+                         const common_iterator<IsConstTmp>& right) noexcept {
+    return left.cur_node_ != right.cur_node_;
+  }
+  //****************************************
+  friend struct List<TempT, Alloc>::ListBody;
+};
+//==========================================
+
+//================ListBody==================
+template <typename TempT, typename Alloc>
+struct List<TempT, Alloc>::ListBody {
+  //*********Allocator functions************
+  node_alloc_type& lb_get_node_allocator() noexcept { return node_alloc_; }
+  const node_alloc_type& lb_get_node_allocator() const noexcept {
+    return node_alloc_;
+  }
+  //****************************************
+ private:
+  //*****************Fields*****************
+  node_alloc_type node_alloc_;
+  size_t size_ = 0;
+  Node* head_node_ = nullptr;
+  Node* tail_node_ = nullptr;
+  //****************************************
+  //**********Allocator functions***********
+  typename Node* lb_node_allocate() {
+    return node_alloc_traits::allocate(node_alloc_, 1);
+    // if it throw exception it will throw further
+  }
+  void lb_node_deallocate(typename Node* node_ptr) noexcept {
+    node_alloc_traits::deallocate(node_alloc_, node_ptr, 1);
+  }
+  //****************************************
+  //************Node functoins**************
+  template <typename... Args>
+  typename Node* lb_create_node(Args&&... args) {
+    Node* ptr = lb_node_allocate();
+    node_alloc_type& all_node = lb_get_node_allocator();
+    try {
+      node_alloc_traits::constrcut(all_node, ptr, std::forward<Args>(args)...);
+    } catch (...) {
+      lb_node_deallocate(ptr);
+      throw;
+    }
+    return ptr;
+  }
+  template <typename... Args>
+  void lb_insert(iterator pos, Args&&... args) {
+    Node* tmp_node = lb_create_node(std::forward<Args>(args)...);
+    // if throws exception in construction it will throwen further
+    Node* pos_cur_node = pos.cur_node_;
+    Node* pos_prev_node = pos.cur_node_->get_prev_neighbour();
+    if (pos_prev_node != nullptr) {
+      pos_prev_node->node_set_next_neighbour(tmp_node);
+    }
+    pos_cur_node->node_set_prev_neighbour(tmp_node);
+    ++size_;
+  }
+  void lb_erase(iterator pos) noexcept {
+    --size_;
+    Node* pos_prev_node = pos.cur_node_->get_prev_neighbour();
+    Node* pos_next_node = pos.cur_node_->get_next_neighbour();
+    Node* pos_cur_node = pos.cur_node_;
+    pos_prev_node->node_set_next_neighbour(pos_next_node);
+    pos_next_node->node_set_prev_neighbour(pos_prev_node);
+    node_alloc_traits::destroy(lb_get_node_allocator(), pos_cur_node);
+    lb_node_deallocate(pos_cur_node);
+  }
+  //****************************************
+
 };
 //==========================================
