@@ -132,6 +132,7 @@ struct List<TempT, Alloc>::Node {
   //****************************************
  public:
   //**************Constructors**************
+  /// TODO: change by using allocator in constructor arguments
   Node() = default;
   Node(const TempT& value)
       : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
@@ -348,6 +349,58 @@ struct List<TempT, Alloc>::ListBody {
     lb_node_deallocate(pos_cur_node);
   }
   //****************************************
+  //*************Range Functions************
+  void lb_range_defaultly_init(const size_t& len) {
+    for (size_t i = 0; i < len; ++i) {
+      lb_emplace_back();
+    }
+  }  // construct list with default value
+  void lb_range_fill_init(const size_t& len, const TempT& value) {
+    for (size_t i = 0; i < len; ++i) {
+      lb_push_back(value);
+    }
+  }  // len times push_back into list
+  //****************************************
+ public:
+  //**************Constructors**************
+  ListBody() = default;
+  ListBody(const allocator_type& alr) : node_alloc_(node_alloc_type(alr)) {}
+  ListBody(const size_t& len, const allocator_type& alr = allocator_type())
+      : node_alloc_(node_alloc_type(alr)) {
+    lb_range_defaultly_init(len);
+  }
+  ListBody(const size_t& len, const value_type& value,
+           const allocator_type& alr = allocator_type())
+      : node_alloc_(node_alloc_type(alr)) {
+    lb_range_fill_init(len, value);
+  }
 
+  //****************************************
+  //****************Modifiers***************
+  void lb_push_back(const TempT& value) {
+    lb_insert(iterator(tail_node_), value);
+  }
+  void lb_push_back(TempT&& value) {
+    lb_insert(iterator(tail_node_), std::move_if_noexcept(value));
+  }
+  template <typename... Args>
+  void lb_emplace_back(Args&&... args) {
+    lb_insert(iterator(tail_node_), std::forward<Args>(args)...);
+  }
+  void lb_push_front(const TempT& value) {
+    lb_insert(iterator(head_node_), value);
+  }
+  void lb_push_front(TempT&& value) {
+    lb_insert(iterator(head_node_), std::move_if_noexcept(value));
+  }
+  template <typename... Args>
+  void lb_emplace_front(Args&&... args) {
+    lb_insert(iterator(head_node_), std::forward<Args>(args)...);
+  }
+  void lb_pop_back() noexcept {
+    lb_erase(iterator(tail_node_->get_prev_neighbour()));
+  }
+  void lb_pop_front() noexcept { lb_erase(iterator(head_node_)); }
+  //****************************************
 };
 //==========================================
