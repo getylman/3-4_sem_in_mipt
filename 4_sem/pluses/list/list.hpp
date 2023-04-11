@@ -161,7 +161,7 @@ struct List<TempT, Alloc>::Node {
     node_construct_attempt(std::move_if_noexcept(value));
   }
   template <typename... Args>
-  Node(Args&&... ars)
+  Node(Args&&... args)
       : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::forward<Args>(args)...);
@@ -321,17 +321,18 @@ struct List<TempT, Alloc>::ListBody {
   Node* tail_node_ = nullptr;
   //****************************************
   //**********Allocator functions***********
-  typename Node* lb_node_allocate() {
+  typename List<TempT, Alloc>::Node* lb_node_allocate() {
     return node_alloc_traits::allocate(node_alloc_, 1);
     // if it throw exception it will throw further
   }
-  void lb_node_deallocate(typename Node* node_ptr) noexcept {
+  void lb_node_deallocate(
+      typename List<TempT, Alloc>::Node* node_ptr) noexcept {
     node_alloc_traits::deallocate(node_alloc_, node_ptr, 1);
   }
   //****************************************
   //************Node functoins**************
   template <typename... Args>
-  typename Node* lb_create_node(Args&&... args) {
+  typename List<TempT, Alloc>::Node* lb_create_node(Args&&... args) {
     Node* ptr = lb_node_allocate();
     node_alloc_type& all_node = lb_get_node_allocator();
     try {
@@ -410,7 +411,7 @@ struct List<TempT, Alloc>::ListBody {
       throw;
     }
   }  // to init list by two iterators
-  //****************************************
+     //****************************************
  public:
   //**************Constructors**************
   ListBody() = default;
@@ -472,7 +473,7 @@ struct List<TempT, Alloc>::ListBody {
   void lb_pop_front() noexcept { lb_erase(iterator(head_node_)); }
   void lb_clear() noexcept {
     while (!lb_empty()) {
-      pop_back();
+      lb_pop_back();
     }
   }
   //****************************************
@@ -492,19 +493,18 @@ List<TempT, Alloc>::List() : list_body_() {}
 
 template <typename TempT, typename Alloc>
 List<TempT, Alloc>::List(const size_t& count, const TempT& value,
-                         const Alloc& alloc = Alloc())
+                         const Alloc& alloc)
     : list_body_(count, value, alloc) {}
 
 template <typename TempT, typename Alloc>
-List<TempT, Alloc>::List(const size_t& count, const Alloc& alloc = Alloc())
+List<TempT, Alloc>::List(const size_t& count, const Alloc& alloc)
     : list_body_(count, alloc) {}
 
 template <typename TempT, typename Alloc>
 List<TempT, Alloc>::List(const List& other) : list_body_(other.list_body_) {}
 
 template <typename TempT, typename Alloc>
-List<TempT, Alloc>::List(std::initializer_list<TempT> init,
-                         const Alloc& alloc = std::allocator<TempT>())
+List<TempT, Alloc>::List(std::initializer_list<TempT> init, const Alloc& alloc)
     : list_body_(init, alloc) {}
 
 template <typename TempT, typename Alloc>
@@ -522,9 +522,13 @@ bool List<TempT, Alloc>::empty() const noexcept {
 //==========================================
 //=================Modifiers================
 template <typename TempT, typename Alloc>
-void List<TempT, Alloc>::pop_back() noexcept { list_body_.lb_pop_back(); }
+void List<TempT, Alloc>::pop_back() noexcept {
+  list_body_.lb_pop_back();
+}
 template <typename TempT, typename Alloc>
-void List<TempT, Alloc>::pop_front() noexcept { list_body_.lb_pop_front(); }
+void List<TempT, Alloc>::pop_front() noexcept {
+  list_body_.lb_pop_front();
+}
 template <typename TempT, typename Alloc>
 void List<TempT, Alloc>::push_back(const TempT& value) {
   list_body_.lb_push_back(value);
