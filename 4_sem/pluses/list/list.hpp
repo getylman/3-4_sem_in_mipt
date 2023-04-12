@@ -29,10 +29,10 @@ class List {
   //========================================
   //============Private usings==============
   using type_alloc_type = typename std::allocator_traits<
-      allocator_type>::template rebind<value_type>::other;
+      allocator_type>::template rebind_alloc<value_type>;
   using type_alloc_traits = std::allocator_traits<type_alloc_type>;
   using node_alloc_type =
-      typename type_alloc_traits::template rebind<Node>::other;
+      typename type_alloc_traits::template rebind_alloc<Node>;
   using node_alloc_traits = std::allocator_traits<node_alloc_type>;
   //========================================
 
@@ -96,12 +96,15 @@ class List {
 //=================Node=====================
 template <typename TempT, typename Alloc>
 struct List<TempT, Alloc>::Node {
- private:
   //************Private Getters*************
-  Node* get_next_neighbour() const noexcept { return next_node_; }
-  Node* get_prev_neighbour() const noexcept { return prev_node_; }
-  TempT& get_body() const noexcept { return *node_body_; }
+  const Node* get_next_neighbour() const noexcept { return next_node_; }
+  const Node* get_prev_neighbour() const noexcept { return prev_node_; }
+  const TempT& get_body() const noexcept { return *node_body_; }
+  Node* get_next_neighbour() noexcept { return next_node_; }
+  Node* get_prev_neighbour() noexcept { return prev_node_; }
+  TempT& get_body() noexcept { return *node_body_; }
   //****************************************
+ private:
   //********Private Memory Functions********
   void node_construct_attempt(const TempT& value) {
     try {
@@ -240,6 +243,7 @@ template <typename TempT, typename Alloc>
 template <bool IsConst>
 class List<TempT, Alloc>::common_iterator {
   //***************Fields*******************
+  /// TODO: тут надо отдельно в поле хранить conditioanal_ptr
   Node* cur_node_;
   //****************************************
  public:
@@ -253,7 +257,7 @@ class List<TempT, Alloc>::common_iterator {
   //************Constructors****************
   common_iterator() noexcept : cur_node_() {}
   explicit common_iterator(const Node* other_node) noexcept
-      : cur_node_(other_node) {}
+      : cur_node_(const_cast<Node*>(other_node)) {}
   template <bool IsConstTmp>
   common_iterator(const common_iterator<IsConstTmp>& other) noexcept
       : cur_node_(other.cur_node_) {}
@@ -313,12 +317,25 @@ struct List<TempT, Alloc>::ListBody {
     return node_alloc_;
   }
   //****************************************
+  //***********Member function**************
+  typename List<TempT, Alloc>::Node* lb_get_head_node() noexcept {
+    return im_node_->get_next_neighbour();
+  }
+  const typename List<TempT, Alloc>::Node* lb_get_head_node() const noexcept {
+    return im_node_->get_next_neighbour();
+  }
+  typename List<TempT, Alloc>::Node* lb_get_tail_node() noexcept {
+    return im_node_->get_prev_neighbour();
+  }
+  const typename List<TempT, Alloc>::Node* lb_tail_head_node() const noexcept {
+    return im_node_->get_prev_neighbour();
+  }
+  //****************************************
  private:
   //*****************Fields*****************
   node_alloc_type node_alloc_;
   size_t size_ = 0;
-  Node* head_node_ = nullptr;
-  Node* tail_node_ = nullptr;
+  Node* im_node_ = nullptr;  // imageinary node
   //****************************************
   //**********Allocator functions***********
   typename List<TempT, Alloc>::Node* lb_node_allocate() {
@@ -336,7 +353,7 @@ struct List<TempT, Alloc>::ListBody {
     Node* ptr = lb_node_allocate();
     node_alloc_type& all_node = lb_get_node_allocator();
     try {
-      node_alloc_traits::constrcut(all_node, ptr, std::forward<Args>(args)...);
+      node_alloc_traits::construct(all_node, ptr, std::forward<Args>(args)...);
     } catch (...) {
       lb_node_deallocate(ptr);
       throw;
@@ -448,29 +465,31 @@ struct List<TempT, Alloc>::ListBody {
   bool lb_empty() const noexcept { return size_ == 0; }
   //****************Modifiers***************
   void lb_push_back(const TempT& value) {
-    lb_insert(iterator(tail_node_), value);
+    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()), value);
   }
   void lb_push_back(TempT&& value) {
-    lb_insert(iterator(tail_node_), std::move_if_noexcept(value));
+    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()),
+              std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_back(Args&&... args) {
-    lb_insert(iterator(tail_node_), std::forward<Args>(args)...);
+    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()),
+              std::forward<Args>(args)...);
   }
   void lb_push_front(const TempT& value) {
-    lb_insert(iterator(head_node_), value);
+    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()), value);
   }
   void lb_push_front(TempT&& value) {
-    lb_insert(iterator(head_node_), std::move_if_noexcept(value));
+    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()),
+              std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_front(Args&&... args) {
-    lb_insert(iterator(head_node_), std::forward<Args>(args)...);
+    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()),
+              std::forward<Args>(args)...);
   }
-  void lb_pop_back() noexcept {
-    lb_erase(iterator(tail_node_->get_prev_neighbour()));
-  }
-  void lb_pop_front() noexcept { lb_erase(iterator(head_node_)); }
+  void lb_pop_back() noexcept { lb_erase(iterator(lb_get_tail_node())); }
+  void lb_pop_front() noexcept { lb_erase(iterator(lb_get_head_node())); }
   void lb_clear() noexcept {
     while (!lb_empty()) {
       lb_pop_back();
@@ -478,10 +497,12 @@ struct List<TempT, Alloc>::ListBody {
   }
   //****************************************
   //*****************Getters****************
-  Node* lb_get_head_node() const noexcept { return head_node_; }
-  Node* lb_get_head_node() noexcept { return head_node_; }
-  Node* lb_get_tail_node() const noexcept { return tail_node_; }
-  Node* lb_get_tail_node() noexcept { return tail_node_; }
+  // typename List<TempT, Alloc>::Node* lb_get_head_node() const noexcept {
+  // return head_node_; } typename List<TempT, Alloc>::Node* lb_get_head_node()
+  // noexcept { return head_node_; } typename List<TempT, Alloc>::Node*
+  // lb_get_tail_node() const noexcept { return tail_node_; } typename
+  // List<TempT, Alloc>::Node* lb_get_tail_node() noexcept { return tail_node_;
+  // }
   //****************************************
 };
 //==========================================
