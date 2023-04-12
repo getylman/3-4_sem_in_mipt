@@ -110,7 +110,7 @@ struct List<TempT, Alloc>::Node {
     try {
       type_alloc_traits::construct(type_alloc_, node_body_, value);
     } catch (...) {
-      type_alloc_traits::deallocate(type_alloc_, 1);
+      type_alloc_traits::deallocate(type_alloc_, node_body_, 1);
       throw;
     }
   }
@@ -383,6 +383,10 @@ struct List<TempT, Alloc>::ListBody {
     im_node_->node_set_next_neighbour(im_node_);
     im_node_->node_set_prev_neighbour(im_node_);
   }  // function to creat imaginary node
+  void lb_destroy_imaginary_node() noexcept {
+    node_alloc_traits::destroy(lb_get_node_allocator(), im_node_);
+    node_alloc_traits::deallocate(lb_get_node_allocator(), im_node_, 1);
+  }
   template <typename... Args>
   void lb_insert_right(iterator pos, Args&&... args) {
     Node* tmp_node = lb_create_node(std::forward<Args>(args)...);
@@ -497,7 +501,10 @@ struct List<TempT, Alloc>::ListBody {
     lb_creat_imaginary_node();
     lb_range_copy_init(init_l.begin(), init_l.end());
   }
-  ~ListBody() { lb_clear(); }
+  ~ListBody() {
+    lb_clear();
+    lb_destroy_imaginary_node();
+  }
 
   //****************************************
   //*****************Capacity***************
@@ -622,19 +629,20 @@ typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::cbegin()
 }
 template <typename TempT, typename Alloc>
 typename List<TempT, Alloc>::iterator List<TempT, Alloc>::end() noexcept {
-  return typename List<TempT, Alloc>::iterator(list_body_.lb_get_tail_node());
+  return typename List<TempT, Alloc>::iterator(
+      list_body_.lb_get_tail_node()->get_next_neighbour());
 }
 template <typename TempT, typename Alloc>
 typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::end()
     const noexcept {
   return typename List<TempT, Alloc>::const_iterator(
-      list_body_.lb_get_tail_node());
+      list_body_.lb_get_tail_node()->get_next_neighbour());
 }
 template <typename TempT, typename Alloc>
 typename List<TempT, Alloc>::const_iterator List<TempT, Alloc>::cend()
     const noexcept {
   return typename List<TempT, Alloc>::const_iterator(
-      list_body_.lb_get_tail_node());
+      list_body_.lb_get_tail_node()->get_next_neighbour());
 }
 
 template <typename TempT, typename Alloc>
