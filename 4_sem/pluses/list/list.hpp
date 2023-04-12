@@ -206,25 +206,37 @@ struct List<TempT, Alloc>::Node {
   //****************************************
   //****************Setters*****************
   void node_set_next_neighbour(Node* node) noexcept {
-    if (node->prev_node_->next_node_ != nullptr) {
-      node->prev_node_->next_node_ = nullptr;
-      // untie the old next node from previous node of the node
+    if (node->get_prev_neighbour() != nullptr) {
+      if (node->prev_node_->next_node_ != nullptr) {
+        node->prev_node_->next_node_ = nullptr;
+        // untie the old next node from previous node of the node
+      }
+      // думаю тут второй иф не нужен (который вложенный)
     }
-    if (next_node_->prev_node_ != nullptr) {
-      next_node_->prev_node_ = nullptr;
-      // untie the old previous node from next node of this
+    if (get_next_neighbour() != nullptr) {
+      if (next_node_->prev_node_ != nullptr) {
+        next_node_->prev_node_ = nullptr;
+        // untie the old previous node from next node of this
+      }
+      // думаю тут второй иф не нужен (который вложенный)
     }
     next_node_ = node;
     node->prev_node_ = &(*this);
   }
   void node_set_prev_neighbour(Node* node) noexcept {
-    if (node->next_node_->prev_node_ != nullptr) {
-      node->next_node_->prev_node_ = nullptr;
-      // untie the old previous node from next node of the node
+    if (node->get_next_neighbour() != nullptr) {
+      if (node->next_node_->prev_node_ != nullptr) {
+        node->next_node_->prev_node_ = nullptr;
+        // untie the old previous node from next node of the node
+      }
+      // думаю тут второй иф не нужен (который вложенный)
     }
-    if (prev_node_->next_node_ != nullptr) {
-      prev_node_->next_node_ = nullptr;
-      // untie the old next node from previous node of this
+    if (get_prev_neighbour() != nullptr) {
+      if (prev_node_->next_node_ != nullptr) {
+        prev_node_->next_node_ = nullptr;
+        // untie the old next node from previous node of this
+      }
+      // думаю тут второй иф не нужен (который вложенный)
     }
     prev_node_ = node;
     node->next_node_ = &(*this);
@@ -330,6 +342,12 @@ struct List<TempT, Alloc>::ListBody {
   const typename List<TempT, Alloc>::Node* lb_tail_head_node() const noexcept {
     return im_node_->get_prev_neighbour();
   }
+  typename List<TempT, Alloc>::Node* lb_get_imag_node() noexcept {
+    return im_node_;
+  }
+  const typename List<TempT, Alloc>::Node* lb_get_imag_node() const noexcept {
+    return im_node_;
+  }
   //****************************************
  private:
   //*****************Fields*****************
@@ -360,8 +378,13 @@ struct List<TempT, Alloc>::ListBody {
     }
     return ptr;
   }
+  void lb_creat_imaginary_node() {
+    im_node_ = lb_create_node();
+    im_node_->node_set_next_neighbour(im_node_);
+    im_node_->node_set_prev_neighbour(im_node_);
+  }  // function to creat imaginary node
   template <typename... Args>
-  void lb_insert(iterator pos, Args&&... args) {
+  void lb_insert_right(iterator pos, Args&&... args) {
     Node* tmp_node = lb_create_node(std::forward<Args>(args)...);
     // if throws exception in construction it will throwen further
     Node* pos_cur_node = pos.cur_node_;
@@ -370,6 +393,18 @@ struct List<TempT, Alloc>::ListBody {
       pos_prev_node->node_set_next_neighbour(tmp_node);
     }
     pos_cur_node->node_set_prev_neighbour(tmp_node);
+    ++size_;
+  }  // this is usual insert
+  template <typename... Args>
+  void lb_insert_left(iterator pos, Args&&... args) {
+    Node* tmp_node = lb_create_node(std::forward<Args>(args)...);
+    // if throws exception in construction it will throwen further
+    Node* pos_cur_node = pos.cur_node_;
+    Node* pos_next_node = pos.cur_node_->get_next_neighbour();
+    if (pos_next_node != nullptr) {
+      pos_next_node->node_set_prev_neighbour(tmp_node);
+    }
+    pos_cur_node->node_set_next_neighbour(tmp_node);
     ++size_;
   }
   void lb_erase(iterator pos) noexcept {
@@ -435,26 +470,31 @@ struct List<TempT, Alloc>::ListBody {
   ListBody(const allocator_type& alr) : node_alloc_(node_alloc_type(alr)) {}
   ListBody(const size_t& len, const allocator_type& alr = allocator_type())
       : node_alloc_(node_alloc_type(alr)) {
+    lb_creat_imaginary_node();
     lb_range_defaultly_init(len);
   }
   ListBody(const size_t& len, const value_type& value,
            const allocator_type& alr = allocator_type())
       : node_alloc_(node_alloc_type(alr)) {
+    lb_creat_imaginary_node();
     lb_range_fill_init(len, value);
   }
   // ListBody(ListBody&& other) = default; make normal
   ListBody(const ListBody& other)
       : node_alloc_(node_alloc_traits::select_on_container_copy_construction(
             other.lb_get_node_allocator())) {
+    lb_creat_imaginary_node();
     lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
   }
   ListBody(const ListBody& other, const allocator_type& alr)
       : node_alloc_(node_alloc_type(alr)) {
+    lb_creat_imaginary_node();
     lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
   }
   ListBody(std::initializer_list<TempT> init_l,
            const allocator_type& alr = allocator_type())
       : node_alloc_(node_alloc_type(alr)) {
+    lb_creat_imaginary_node();
     lb_range_copy_init(init_l.begin(), init_l.end());
   }
   ~ListBody() { lb_clear(); }
@@ -465,28 +505,24 @@ struct List<TempT, Alloc>::ListBody {
   bool lb_empty() const noexcept { return size_ == 0; }
   //****************Modifiers***************
   void lb_push_back(const TempT& value) {
-    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()), value);
+    lb_insert_right(iterator(lb_get_imag_node()), value);
   }
   void lb_push_back(TempT&& value) {
-    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()),
-              std::move_if_noexcept(value));
+    lb_insert_right(iterator(lb_get_imag_node()), std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_back(Args&&... args) {
-    lb_insert(iterator(lb_get_tail_node()->get_next_neighbour()),
-              std::forward<Args>(args)...);
+    lb_insert_right(iterator(lb_get_imag_node()), std::forward<Args>(args)...);
   }
   void lb_push_front(const TempT& value) {
-    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()), value);
+    lb_insert_left(iterator(lb_get_imag_node()), value);
   }
   void lb_push_front(TempT&& value) {
-    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()),
-              std::move_if_noexcept(value));
+    lb_insert_left(iterator(lb_get_imag_node()), std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_front(Args&&... args) {
-    lb_insert(iterator(lb_get_head_node()->get_prev_neighbour()),
-              std::forward<Args>(args)...);
+    lb_insert_left(iterator(lb_get_imag_node()), std::forward<Args>(args)...);
   }
   void lb_pop_back() noexcept { lb_erase(iterator(lb_get_tail_node())); }
   void lb_pop_front() noexcept { lb_erase(iterator(lb_get_head_node())); }
