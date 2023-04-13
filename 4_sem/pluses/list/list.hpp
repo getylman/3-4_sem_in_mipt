@@ -3,6 +3,7 @@
 #include <iterator>
 #include <memory>
 #include <type_traits>
+#include <utility>
 
 template <typename TempT, typename Alloc = std::allocator<TempT>>
 class List {
@@ -105,40 +106,47 @@ struct List<TempT, Alloc>::Node {
   TempT& get_body() noexcept { return *node_body_; }
   //****************************************
  private:
+  //**********Allocator functions***********
+  const type_alloc_type& node_get_allocator() const noexcept {
+    return type_alloc_;
+  }
+  type_alloc_type& node_get_allocator() noexcept { return type_alloc_; }
+  //****************************************
   //********Private Memory Functions********
   void node_construct_attempt(const TempT& value) {
     try {
-      type_alloc_traits::construct(type_alloc_, node_body_, value);
+      type_alloc_traits::construct(node_get_allocator(), node_body_, value);
     } catch (...) {
-      type_alloc_traits::deallocate(type_alloc_, node_body_, 1);
+      type_alloc_traits::deallocate(node_get_allocator(), node_body_, 1);
       throw;
     }
   }
   void node_construct_attempt(TempT&& value) {
     try {
-      type_alloc_traits::construct(type_alloc_, node_body_,
+      type_alloc_traits::construct(node_get_allocator(), node_body_,
                                    std::move_if_noexcept(value));
     } catch (...) {
-      type_alloc_traits::deallocate(type_alloc_, 1);
+      type_alloc_traits::deallocate(node_get_allocator(), 1);
       throw;
     }
   }
   template <typename... Args>
   void node_construct_attempt(Args&&... args) {
     try {
-      type_alloc_traits::construct(type_alloc_, node_body_,
+      type_alloc_traits::construct(node_get_allocator(), node_body_,
                                    std::forward<Args>(args)...);
     } catch (...) {
-      type_alloc_traits::deallocate(type_alloc_, 1);
+      type_alloc_traits::deallocate(node_get_allocator(), node_body_, 1);
       throw;
     }
   }
 
   void node_suicide() noexcept {
-    if (node_body_ != nullptr) {
-      type_alloc_traits::destroy(type_alloc_, node_body_);
-      type_alloc_traits::deallocate(type_alloc_, node_body_, 1);
+    if (node_body_ == nullptr) {
+      return;
     }
+    type_alloc_traits::destroy(node_get_allocator(), node_body_);
+    type_alloc_traits::deallocate(node_get_allocator(), node_body_, 1);
   }
   void node_copy_neighbours(const Node& other) noexcept {
     next_node_ = other.get_next_neighbour();
@@ -154,28 +162,29 @@ struct List<TempT, Alloc>::Node {
   /// TODO: change by using allocator in constructor arguments
   Node() = default;
   Node(const TempT& value)
-      : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(value);
   }
   Node(TempT&& value)
-      : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::move_if_noexcept(value));
   }
   template <typename... Args>
   Node(Args&&... args)
-      : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::forward<Args>(args)...);
   }
   ~Node() { node_suicide(); }
   Node(const Node& other)
-      : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     node_construct_attempt(other.get_body());
     node_copy_neighbours(other);
   }
-  Node(Node&& other) : node_body_(type_alloc_traits::allocate(type_alloc_, 1)) {
+  Node(Node&& other)
+      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     node_construct_attempt(std::move(other.get_body()));
     node_copy_neighbours(other);
   }
@@ -258,6 +267,10 @@ class List<TempT, Alloc>::common_iterator {
   /// TODO: тут надо отдельно в поле хранить conditioanal_ptr
   Node* cur_node_;
   //****************************************
+  //**************Private usings****************
+  using conditional_ptr = std::conditional_t<IsConst, const TempT*, TempT*>;
+  using conditional_ref = std::conditional_t<IsConst, const TempT&, TempT&>;
+  //********************************************
  public:
   //***************Usings*******************
   using difference_type = ptrdiff_t;
@@ -281,8 +294,8 @@ class List<TempT, Alloc>::common_iterator {
   }
   //****************************************
   //*********Memory Access Operators********
-  pointer operator->() const noexcept { return &cur_node_->get_body(); }
-  reference operator*() const noexcept { return cur_node_->get_body(); }
+  conditional_ptr operator->() const noexcept { return &cur_node_->get_body(); }
+  conditional_ref operator*() const noexcept { return cur_node_->get_body(); }
   //****************************************
   //***********Arithmetic Operators*********
   common_iterator<IsConst>& operator++() noexcept {
@@ -339,7 +352,7 @@ struct List<TempT, Alloc>::ListBody {
   typename List<TempT, Alloc>::Node* lb_get_tail_node() noexcept {
     return im_node_->get_prev_neighbour();
   }
-  const typename List<TempT, Alloc>::Node* lb_tail_head_node() const noexcept {
+  const typename List<TempT, Alloc>::Node* lb_get_tail_node() const noexcept {
     return im_node_->get_prev_neighbour();
   }
   typename List<TempT, Alloc>::Node* lb_get_imag_node() noexcept {
@@ -384,6 +397,9 @@ struct List<TempT, Alloc>::ListBody {
     im_node_->node_set_prev_neighbour(im_node_);
   }  // function to creat imaginary node
   void lb_destroy_imaginary_node() noexcept {
+    if (im_node_ == nullptr) {
+      return;
+    }
     node_alloc_traits::destroy(lb_get_node_allocator(), im_node_);
     node_alloc_traits::deallocate(lb_get_node_allocator(), im_node_, 1);
   }
@@ -467,7 +483,48 @@ struct List<TempT, Alloc>::ListBody {
       throw;
     }
   }  // to init list by two iterators
-     //****************************************
+  void lb_pocca_true_s(const ListBody& other) {
+    // pocca -> propagate_on_container_copy_assignment
+    ListBody tmp_list(other);
+    // if throw exception it will be catched outer
+    lb_clear();
+    lb_destroy_imaginary_node();
+    // destroy *this fields
+    im_node_ = std::move(tmp_list.lb_get_imag_node());
+    node_alloc_ = std::move(tmp_list.lb_get_node_allocator());
+    size_ = tmp_list.lb_size();
+    // move new fields into *this
+    tmp_list.size_ = 0;
+    tmp_list.im_node_ = nullptr;
+    // push default value into tmp
+  }  // used into operator=
+  void lb_pocca_false_s(const ListBody& other) {
+    // pocca -> propagate_on_container_copy_assignment
+    ListBody tmp_list;
+    iterator iter(other.lb_get_head_node());
+    iterator fin_iter(other.lb_get_tail_node()->get_next_neighbour());
+    try {
+      for (; iter != fin_iter; ++iter) {
+        tmp_list.lb_push_back(*iter);
+      }
+    } catch (...) {
+      tmp_list.lb_clear();
+      tmp_list.lb_destroy_imaginary_node();
+      throw;
+    }
+    // create tmp list
+    lb_clear();
+    lb_destroy_imaginary_node();
+    // destroy old nodes
+    im_node_ = std::move(tmp_list.lb_get_imag_node());
+    node_alloc_ = std::move(tmp_list.lb_get_node_allocator());
+    size_ = tmp_list.lb_size();
+    // move new fields into *this
+    tmp_list.size_ = 0;
+    tmp_list.im_node_ = nullptr;
+    // push default value into tmp
+  }
+  //****************************************
  public:
   //**************Constructors**************
   ListBody() = default;
@@ -488,12 +545,16 @@ struct List<TempT, Alloc>::ListBody {
       : node_alloc_(node_alloc_traits::select_on_container_copy_construction(
             other.lb_get_node_allocator())) {
     lb_creat_imaginary_node();
-    lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
+    lb_range_copy_init(
+        iterator(other.lb_get_head_node()),
+        iterator(other.lb_get_tail_node()->get_next_neighbour()));
   }
   ListBody(const ListBody& other, const allocator_type& alr)
       : node_alloc_(node_alloc_type(alr)) {
     lb_creat_imaginary_node();
-    lb_range_copy_init(iterator(other.head_node_), iterator(other.tail_node_));
+    lb_range_copy_init(
+        iterator(other.lb_get_head_node()),
+        iterator(other.lb_get_tail_node()->get_next_neighbour()));
   }
   ListBody(std::initializer_list<TempT> init_l,
            const allocator_type& alr = allocator_type())
@@ -505,30 +566,98 @@ struct List<TempT, Alloc>::ListBody {
     lb_clear();
     lb_destroy_imaginary_node();
   }
+  ListBody& operator=(const ListBody& other) & {
+    if (*this == other) {
+      return *this;
+    }
+    const bool res =
+        node_alloc_traits::propagate_on_container_copy_assignment::value;
+    if (res) {
+      lb_pocca_true_s(other);
+    } else {
+      lb_pocca_false_s(other);
+    }
+    return *this;
+  }
+  ListBody& operator=(ListBody&& other) & noexcept {
+    if (*this == other) {
+      return *this;
+    }
+    if (lb_get_imag_node() != nullptr) {
+      lb_clear();
+      lb_destroy_imaginary_node();
+      // suicide
+    }
+    im_node_ = std::move(other.lb_get_imag_node());
+    size_ = other.lb_size();
+    node_alloc_ = std::move(other.lb_get_node_allocator());
+    // move all fields
+    other.size_ = 0;
+    im_node_ = nullptr;
+    // push default value into other
+    return *this;
+  }
 
+  //****************************************
+  //***************Comparation**************
+  friend bool operator==(const ListBody& left, const ListBody& right) {
+    if (left.lb_size() != right.lb_size()) {
+      return false;
+    }
+    const_iterator it1(left.lb_get_head_node());
+    const_iterator it2(right.lb_get_head_node());
+    const_iterator fin1(left.lb_get_tail_node()->get_next_neighbour());
+    const_iterator fin2(right.lb_get_tail_node()->get_next_neighbour());
+    while (it1 != fin1 && it2 != fin2 && *it1 == *it2) {
+      ++it1;
+      ++it2;
+    }
+    return it1 == fin1 && it2 == fin2;
+  }
+  friend bool operator!=(const ListBody& left, const ListBody& right) {
+    return !(left == right);
+  }
   //****************************************
   //*****************Capacity***************
   size_t lb_size() const noexcept { return size_; }
   bool lb_empty() const noexcept { return size_ == 0; }
   //****************Modifiers***************
   void lb_push_back(const TempT& value) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_right(iterator(lb_get_imag_node()), value);
   }
   void lb_push_back(TempT&& value) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_right(iterator(lb_get_imag_node()), std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_back(Args&&... args) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_right(iterator(lb_get_imag_node()), std::forward<Args>(args)...);
   }
   void lb_push_front(const TempT& value) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_left(iterator(lb_get_imag_node()), value);
   }
   void lb_push_front(TempT&& value) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_left(iterator(lb_get_imag_node()), std::move_if_noexcept(value));
   }
   template <typename... Args>
   void lb_emplace_front(Args&&... args) {
+    if (lb_get_imag_node() == nullptr) {
+      lb_creat_imaginary_node();
+    }
     lb_insert_left(iterator(lb_get_imag_node()), std::forward<Args>(args)...);
   }
   void lb_pop_back() noexcept { lb_erase(iterator(lb_get_tail_node())); }
@@ -538,14 +667,6 @@ struct List<TempT, Alloc>::ListBody {
       lb_pop_back();
     }
   }
-  //****************************************
-  //*****************Getters****************
-  // typename List<TempT, Alloc>::Node* lb_get_head_node() const noexcept {
-  // return head_node_; } typename List<TempT, Alloc>::Node* lb_get_head_node()
-  // noexcept { return head_node_; } typename List<TempT, Alloc>::Node*
-  // lb_get_tail_node() const noexcept { return tail_node_; } typename
-  // List<TempT, Alloc>::Node* lb_get_tail_node() noexcept { return tail_node_;
-  // }
   //****************************************
 };
 //==========================================
@@ -573,6 +694,13 @@ List<TempT, Alloc>::List(std::initializer_list<TempT> init, const Alloc& alloc)
 
 template <typename TempT, typename Alloc>
 List<TempT, Alloc>::~List() = default;
+
+template <typename TempT, typename Alloc>
+List<TempT, Alloc>& List<TempT, Alloc>::operator=(
+    const List<TempT, Alloc>& other) & {
+  list_body_ = other.list_body_;
+  return *this;
+}
 //==========================================
 //=================Capacity=================
 template <typename TempT, typename Alloc>
