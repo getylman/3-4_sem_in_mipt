@@ -17,6 +17,10 @@ class List {
   using const_reference = const TempT&;
   using difference_type = ptrdiff_t;
   //========================================
+  //===============Iterator=================
+  template <bool IsConst>
+  class common_iterator;
+  //========================================
 
  private:
   //=================Node===================
@@ -38,15 +42,15 @@ class List {
   //========================================
 
  public:
-  //===============Iterator=================
-  template <bool IsConst>
-  class common_iterator;
-  //========================================
   //=================Usings=================
   using iterator = common_iterator<false>;
   using const_iterator = common_iterator<true>;
   using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
   using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
+  //========================================
+  //=============Alloc Getters==============
+  Alloc get_allocator() noexcept;
+  Alloc get_allocator() const noexcept;
   //========================================
   //==============Constructors==============
   List();
@@ -54,8 +58,7 @@ class List {
   explicit List(const size_t& count, const Alloc& alloc = Alloc());
   List(const List& other);
   List(List&& other);
-  List(std::initializer_list<TempT> init,
-       const Alloc& alloc = std::allocator<TempT>());
+  List(std::initializer_list<TempT> init, const Alloc& alloc = Alloc());
   ~List();
   List<TempT, Alloc>& operator=(const List<TempT, Alloc>& other) &;
   List<TempT, Alloc>& operator=(List<TempT, Alloc>&& other) & noexcept;
@@ -92,6 +95,8 @@ class List {
   const_reverse_iterator rend() const noexcept;
   const_reverse_iterator crend() const noexcept;
   //========================================
+  friend struct Node;
+  friend struct ListBody;
 };
 
 //=================Node=====================
@@ -126,7 +131,7 @@ struct List<TempT, Alloc>::Node {
       type_alloc_traits::construct(node_get_allocator(), node_body_,
                                    std::move_if_noexcept(value));
     } catch (...) {
-      type_alloc_traits::deallocate(node_get_allocator(), 1);
+      type_alloc_traits::deallocate(node_get_allocator(), node_body_, 1);
       throw;
     }
   }
@@ -161,36 +166,54 @@ struct List<TempT, Alloc>::Node {
   //**************Constructors**************
   /// TODO: change by using allocator in constructor arguments
   Node() = default;
-  Node(const TempT& value)
-      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+  Node(const allocator_type& alr, const TempT& value)
+      : type_alloc_(type_alloc_type(alr)),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(value);
   }
+  Node(const TempT& value)
+      : type_alloc_(type_alloc_type(allocator_type())),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+    // if throws exception in allocation it will throwen further
+    node_construct_attempt(value);
+  }
+  Node(const allocator_type& alr, TempT&& value)
+      : type_alloc_(type_alloc_type(alr)),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+    // if throws exception in allocation it will throwen further
+    node_construct_attempt(std::move_if_noexcept(value));
+  }
   Node(TempT&& value)
-      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+      : type_alloc_(type_alloc_type(allocator_type())),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::move_if_noexcept(value));
   }
   template <typename... Args>
-  Node(Args&&... args)
-      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+  Node(const allocator_type& alr, Args&&... args)
+      : type_alloc_(type_alloc_type(alr)),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     // if throws exception in allocation it will throwen further
     node_construct_attempt(std::forward<Args>(args)...);
   }
   ~Node() { node_suicide(); }
   Node(const Node& other)
-      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+      : type_alloc_(other.node_get_allocator()),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     node_construct_attempt(other.get_body());
     node_copy_neighbours(other);
   }
   Node(Node&& other)
-      : node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
+      : type_alloc_(other.node_get_allocator()),
+        node_body_(type_alloc_traits::allocate(node_get_allocator(), 1)) {
     node_construct_attempt(std::move(other.get_body()));
     node_copy_neighbours(other);
   }
   Node& operator=(Node&& other) & noexcept {
     if (*this == other) {
       node_suicide();
+      type_alloc_ = std::move(other.node_get_allocator());
       node_body_ = &other.get_body();
       node_copy_neighbours(std::move(other));
       other.next_node_ = other.prev_node_ = other.node_body_ = nullptr;
@@ -199,6 +222,7 @@ struct List<TempT, Alloc>::Node {
   }
   Node& operator=(const Node& other) & {
     if (other != *this) {
+      type_alloc_ = other.node_get_allocator();
       *node_body_ = other.get_body();
       node_copy_neighbours(other);
     }
@@ -256,13 +280,16 @@ struct List<TempT, Alloc>::Node {
   Node* next_node_ = nullptr;
   pointer node_body_ = nullptr;
   allocator_type type_alloc_;
+  friend struct List<TempT, Alloc>::ListBody;
 };
 //==========================================
 
 //================Iterator==================
 template <typename TempT, typename Alloc>
 template <bool IsConst>
-class List<TempT, Alloc>::common_iterator {
+class List<TempT, Alloc>::common_iterator
+    : public std::iterator<std::bidirectional_iterator_tag,
+                           std::conditional_t<IsConst, const TempT, TempT>> {
   //***************Fields*******************
   /// TODO: тут надо отдельно в поле хранить conditioanal_ptr
   Node* cur_node_;
@@ -273,11 +300,11 @@ class List<TempT, Alloc>::common_iterator {
   //********************************************
  public:
   //***************Usings*******************
-  using difference_type = ptrdiff_t;
-  using value_type = TempT;
-  using reference = TempT&;
-  using pointer = TempT*;
-  using iterator_category = std::bidirectional_iterator_tag;
+  // using difference_type = ptrdiff_t;
+  // using value_type = TempT;
+  // using reference = TempT&;
+  // using pointer = TempT*;
+  // using iterator_category = std::bidirectional_iterator_tag;
   //****************************************
   //************Constructors****************
   common_iterator() noexcept : cur_node_() {}
@@ -295,7 +322,9 @@ class List<TempT, Alloc>::common_iterator {
   //****************************************
   //*********Memory Access Operators********
   conditional_ptr operator->() const noexcept { return &cur_node_->get_body(); }
+  conditional_ptr operator->() noexcept { return &cur_node_->get_body(); }
   conditional_ref operator*() const noexcept { return cur_node_->get_body(); }
+  conditional_ref operator*() noexcept { return cur_node_->get_body(); }
   //****************************************
   //***********Arithmetic Operators*********
   common_iterator<IsConst>& operator++() noexcept {
@@ -336,6 +365,20 @@ class List<TempT, Alloc>::common_iterator {
 //================ListBody==================
 template <typename TempT, typename Alloc>
 struct List<TempT, Alloc>::ListBody {
+ private:
+  //************Private usings**************
+  using type_alloc_type = typename std::allocator_traits<
+      allocator_type>::template rebind_alloc<value_type>;
+  using type_alloc_traits = std::allocator_traits<type_alloc_type>;
+  using node_alloc_type =
+      typename type_alloc_traits::template rebind_alloc<Node>;
+  using node_alloc_traits = std::allocator_traits<node_alloc_type>;
+  using iterator = common_iterator<false>;
+  using const_iterator = common_iterator<true>;
+  using reverse_iterator = std::reverse_iterator<common_iterator<false>>;
+  using const_reverse_iterator = std::reverse_iterator<common_iterator<true>>;
+  //****************************************
+ public:
   //*********Allocator functions************
   node_alloc_type& lb_get_node_allocator() noexcept { return node_alloc_; }
   const node_alloc_type& lb_get_node_allocator() const noexcept {
@@ -382,9 +425,10 @@ struct List<TempT, Alloc>::ListBody {
   template <typename... Args>
   typename List<TempT, Alloc>::Node* lb_create_node(Args&&... args) {
     Node* ptr = lb_node_allocate();
-    node_alloc_type& all_node = lb_get_node_allocator();
+    node_alloc_type all_node = lb_get_node_allocator();
     try {
-      node_alloc_traits::construct(all_node, ptr, std::forward<Args>(args)...);
+      node_alloc_traits::construct(all_node, ptr, all_node,
+                                   std::forward<Args>(args)...);
     } catch (...) {
       lb_node_deallocate(ptr);
       throw;
@@ -392,15 +436,15 @@ struct List<TempT, Alloc>::ListBody {
     return ptr;
   }
   void lb_creat_imaginary_node() {
-    im_node_ = lb_create_node();
-    im_node_->node_set_next_neighbour(im_node_);
-    im_node_->node_set_prev_neighbour(im_node_);
+    im_node_ = lb_node_allocate();
+    im_node_->next_node_ = im_node_;
+    im_node_->prev_node_ = im_node_;
   }  // function to creat imaginary node
   void lb_destroy_imaginary_node() noexcept {
     if (im_node_ == nullptr) {
       return;
     }
-    node_alloc_traits::destroy(lb_get_node_allocator(), im_node_);
+    // node_alloc_traits::destroy(lb_get_node_allocator(), im_node_);
     node_alloc_traits::deallocate(lb_get_node_allocator(), im_node_, 1);
   }
   template <typename... Args>
@@ -441,7 +485,7 @@ struct List<TempT, Alloc>::ListBody {
   }
   //****************************************
   //*************Range Functions************
-  void lb_range_poper(const size_t idx) noexcept {
+  void lb_range_poper(const size_t& idx) noexcept {
     for (size_t i = 0; i < idx; ++i) {
       lb_pop_back();
     }
@@ -509,7 +553,7 @@ struct List<TempT, Alloc>::ListBody {
       }
     } catch (...) {
       tmp_list.lb_clear();
-      tmp_list.lb_destroy_imaginary_node();
+      // tmp_list.lb_destroy_imaginary_node();
       throw;
     }
     // create tmp list
@@ -527,7 +571,7 @@ struct List<TempT, Alloc>::ListBody {
   //****************************************
  public:
   //**************Constructors**************
-  ListBody() = default;
+  ListBody() : node_alloc_(node_alloc_type(allocator_type())) {}
   ListBody(const allocator_type& alr) : node_alloc_(node_alloc_type(alr)) {}
   ListBody(const size_t& len, const allocator_type& alr = allocator_type())
       : node_alloc_(node_alloc_type(alr)) {
@@ -567,12 +611,9 @@ struct List<TempT, Alloc>::ListBody {
     lb_destroy_imaginary_node();
   }
   ListBody& operator=(const ListBody& other) & {
-    if (*this == other) {
-      return *this;
-    }
-    const bool res =
+    const bool kRes =
         node_alloc_traits::propagate_on_container_copy_assignment::value;
-    if (res) {
+    if (kRes) {
       lb_pocca_true_s(other);
     } else {
       lb_pocca_false_s(other);
@@ -580,9 +621,6 @@ struct List<TempT, Alloc>::ListBody {
     return *this;
   }
   ListBody& operator=(ListBody&& other) & noexcept {
-    if (*this == other) {
-      return *this;
-    }
     if (lb_get_imag_node() != nullptr) {
       lb_clear();
       lb_destroy_imaginary_node();
@@ -804,4 +842,14 @@ typename List<TempT, Alloc>::const_reverse_iterator List<TempT, Alloc>::crend()
   return typename List<TempT, Alloc>::const_reverse_iterator(begin());
 }
 //==========================================
+//=============Alloc Getters================
+template <typename TempT, typename Alloc>
+Alloc List<TempT, Alloc>::get_allocator() noexcept {
+  return (Alloc)(list_body_.lb_get_node_allocator());
+}
+template <typename TempT, typename Alloc>
+Alloc List<TempT, Alloc>::get_allocator() const noexcept {
+  return (Alloc)(list_body_.lb_get_node_allocator());
+}
+//========================================
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
