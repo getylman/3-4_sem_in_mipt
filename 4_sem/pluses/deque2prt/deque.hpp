@@ -1,7 +1,7 @@
 /**
  * @file deque.hpp
  * @author getylman
- * @date 3.04.2023
+ * @date 29.04.2023
  */
 
 /*
@@ -44,11 +44,13 @@ class Deque {
   //==============================================
   //============Allocator functions===============
   chunk_alloc_type& get_chunk_allocator() noexcept { return chunk_alloc_; }
-  chunk_alloc_type& get_chunk_allocator() const noexcept {
+  const chunk_alloc_type& get_chunk_allocator() const noexcept {
     return chunk_alloc_;
   }
   type_alloc_type& get_type_allocator() noexcept { return type_alloc_; }
-  type_alloc_type& get_type_allocator() const noexcept { return type_alloc_; }
+  const type_alloc_type& get_type_allocator() const noexcept {
+    return type_alloc_;
+  }
   //==============================================
  public:
   //=================Usings=======================
@@ -254,7 +256,9 @@ class Deque {
     pr_vec_deallocate(vec_of_chunks_, num_of_chunks_);
   }  // clear all memory
   void pr_vec_reallocation(const size_t& new_len, const size_t& delta = 0) {
+    id_start_ += delta;
     chunk_pointer tmp = pr_vec_allocate(new_len);
+    id_start_ -= delta;
     size_t idx = id_start_;
     try {
       for (; idx < id_finish_; ++idx) {
@@ -270,13 +274,13 @@ class Deque {
     }
     pr_clear_mem();
     vec_of_chunks_ = tmp;
-    num_of_chunks_ = new_len;
     id_start_ += delta;
     id_finish_ += delta;
-    for (size_t i = id_finish_; i < num_of_chunks_; ++i) {
-      (vec_of_chunks_ + i)->chunk_tail_id_ =
-          (vec_of_chunks_ + i)->chunk_tail_id_ = 0;
-    }
+    num_of_chunks_ = new_len;
+    // for (size_t i = id_finish_; i < num_of_chunks_; ++i) {
+    //   (vec_of_chunks_ + i)->chunk_tail_id_ =
+    //       (vec_of_chunks_ + i)->chunk_head_id_ = 0;
+    // }
   }  // reallocation memory to another place and increase capacity
   void pr_range_fill_init(const size_t& len, const TempT& value) {
     size_t idx = 0;
@@ -353,8 +357,10 @@ class Deque {
     }
   }  // to init deque by to iterators
   void pr_clear() noexcept {
-    while (!empty()) {
-      pop_back();
+    if (vec_of_chunks_ != nullptr) {
+      while (!empty()) {
+        pop_back();
+      }
     }
   }  // destroy all objects
   //==============================================
@@ -366,10 +372,10 @@ class Deque<TempT, Alloc>::Chunk {
   // there will be no constructor or destructor
   // since everything will be performed one level higher
   //****************Fields***********************
-  pointer chunk_body_ = nullptr;  // pointer of chunk body
-  uint64_t chunk_rank_ = 512;     // chunk max capacity
-  uint64_t chunk_head_id_ = 0;    // head index
-  uint64_t chunk_tail_id_ = 0;    // tail index
+  pointer chunk_body_ = nullptr;    // pointer of chunk body
+  const uint64_t kChunkRank = 512;  // chunk max capacity
+  uint64_t chunk_head_id_ = 0;      // head index
+  uint64_t chunk_tail_id_ = 0;      // tail index
   // int16_t l_changing_delta_ = -1;  // delta for moving to left
   // int16_t r_changing_delta_ = 1;   // delta for moving to right
   type_alloc_type type_alloc_;  // allocator of type
@@ -421,6 +427,11 @@ class Deque<TempT, Alloc>::common_iterator
   uint64_t idx_in_chunk_ = 0;
   //*********************************************
  public:
+  //********************Getters******************
+  uint64_t get_id_in_current_chunk() const noexcept { return idx_in_chunk_; }
+  chunk_pointer get_ptr_of_current_chunk() const noexcept { return ptr_chunk_; }
+  chunk_pointer get_ptr_of_current_chunk() noexcept { return ptr_chunk_; }
+  //*********************************************
   //******************Constructors***************
   common_iterator() noexcept : ptr_chunk_(), idx_in_chunk_(0) {}
   explicit common_iterator(const Chunk* other_chunk_ptr,
@@ -429,12 +440,13 @@ class Deque<TempT, Alloc>::common_iterator
         idx_in_chunk_(other_id) {}
   template <bool IsConstTmp>
   common_iterator(const common_iterator<IsConstTmp>& other) noexcept
-      : ptr_chunk_(other.ptr_chunk_), idx_in_chunk_(other.idx_in_chunk_) {}
+      : ptr_chunk_(other.get_ptr_of_current_chunk()),
+        idx_in_chunk_(other.get_id_in_current_chunk()) {}
   template <bool IsConstTmp>
   common_iterator<IsConst>& operator=(
-      const common_iterator<IsConstTmp>& other) {
-    ptr_chunk_ = other.ptr_chunk_;
-    idx_in_chunk_ = other.idx_in_chunk_;
+      const common_iterator<IsConstTmp>& other) noexcept {
+    ptr_chunk_ = other.get_ptr_of_current_chunk();
+    idx_in_chunk_ = other.get_id_in_current_chunk();
     return *this;
   }
   //*********************************************
@@ -472,12 +484,14 @@ class Deque<TempT, Alloc>::common_iterator
   common_iterator<IsConst>& operator-=(const difference_type& delta) noexcept {
     return *this += -delta;
   }
-  common_iterator<IsConst> operator+(const difference_type& delta) noexcept {
+  common_iterator<IsConst> operator+(
+      const difference_type& delta) const noexcept {
     common_iterator<IsConst> tmp = *this;
     tmp += delta;
     return tmp;
   }
-  common_iterator<IsConst> operator-(const difference_type& delta) noexcept {
+  common_iterator<IsConst> operator-(
+      const difference_type& delta) const noexcept {
     common_iterator<IsConst> tmp = *this;
     tmp -= delta;
     return tmp;
@@ -485,18 +499,26 @@ class Deque<TempT, Alloc>::common_iterator
   common_iterator<IsConst>& operator++() noexcept { return *this += 1; }
   common_iterator<IsConst>& operator--() noexcept { return *this -= 1; }
   common_iterator<IsConst> operator++(int) noexcept {
-    return ++common_iterator<IsConst>(*this);
+    common_iterator<IsConst> tmp(*this);
+    *this += 1;
+    return tmp;
   }
   common_iterator<IsConst> operator--(int) noexcept {
-    return --common_iterator<IsConst>(*this);
+    common_iterator<IsConst> tmp(*this);
+    *this -= 1;
+    return tmp;
   }
   template <bool IsConstTmp>
   difference_type operator-(const common_iterator<IsConstTmp>& iter) noexcept {
-    return static_cast<difference_type>(set_chunk_rank()) *
-               static_cast<difference_type>(
-                   ptr_chunk_ - iter.ptr_chunk_ -
-                   static_cast<difference_type>(ptr_chunk_ != nullptr)) +
-           (idx_in_chunk_) + (set_chunk_rank() - iter.idx_in_chunk_);
+    return (*this == iter)
+               ? 0
+               : static_cast<difference_type>(set_chunk_rank()) *
+                         static_cast<difference_type>(
+                             ptr_chunk_ - iter.get_ptr_of_current_chunk() -
+                             static_cast<difference_type>(ptr_chunk_ !=
+                                                          nullptr)) +
+                     (idx_in_chunk_) +
+                     (set_chunk_rank() - iter.get_id_in_current_chunk());
   }
   //*********************************************
   //************Compare operators****************
@@ -517,14 +539,13 @@ class Deque<TempT, Alloc>::common_iterator
   template <bool IsConstTmp>
   friend bool operator==(const common_iterator<IsConst>& it1,
                          const common_iterator<IsConstTmp>& it2) noexcept {
-    return (it1.ptr_chunk_ == it2.ptr_chunk_) &&
-           (it1.idx_in_chunk_ == it2.idx_in_chunk_);
+    return (it1.get_ptr_of_current_chunk() == it2.get_ptr_of_current_chunk()) &&
+           (it1.get_id_in_current_chunk() == it2.get_id_in_current_chunk());
   }
   template <bool IsConstTmp>
   friend bool operator!=(const common_iterator<IsConst>& it1,
                          const common_iterator<IsConstTmp>& it2) noexcept {
-    return (it1.ptr_chunk_ != it2.ptr_chunk_) ||
-           (it1.idx_in_chunk_ != it2.idx_in_chunk_);
+    return !(it1 == it2);
   }
   template <bool IsConstTmp>
   friend bool operator<=(const common_iterator<IsConst>& it1,
@@ -623,6 +644,7 @@ Deque<TempT, Alloc>::Deque(std::initializer_list<TempT> init,
     pr_vec_deallocate(vec_of_chunks_, kFullSize);
     throw;
   }
+  ++id_start_;
 }
 template <typename TempT, typename Alloc>
 Deque<TempT, Alloc>::Deque(const Deque<TempT, Alloc>& deq)
@@ -630,18 +652,21 @@ Deque<TempT, Alloc>::Deque(const Deque<TempT, Alloc>& deq)
           deq.get_type_allocator())),
       chunk_alloc_(chunk_alloc_traits::select_on_container_copy_construction(
           deq.get_chunk_allocator())) {
-  const size_t kLen = deq.size();
-  const size_t kSize = kLen / set_chunk_rank() + 1;
-  const size_t kFullSize = std::max(kSize + 2, kDefaultDequeLenth);
-  id_start_ = 0;
-  id_finish_ = 1;
-  num_of_chunks_ = kFullSize;
-  vec_of_chunks_ = pr_vec_allocate(kFullSize);
-  try {
-    pr_range_copy_init(deq.begin(), deq.end());
-  } catch (...) {
-    pr_vec_deallocate(vec_of_chunks_, kFullSize);
-    throw;
+  if (deq.vec_of_chunks_ != nullptr) {
+    const size_t kLen = deq.size();
+    const size_t kSize = kLen / set_chunk_rank() + 1;
+    const size_t kFullSize = std::max(kSize + 2, kDefaultDequeLenth);
+    id_start_ = 0;
+    id_finish_ = 1;
+    num_of_chunks_ = kFullSize;
+    vec_of_chunks_ = pr_vec_allocate(kFullSize);
+    try {
+      pr_range_copy_init(deq.begin(), deq.end());
+    } catch (...) {
+      pr_vec_deallocate(vec_of_chunks_, kFullSize);
+      throw;
+    }
+    ++id_start_;
   }
 }
 template <typename TempT, typename Alloc>
@@ -649,13 +674,27 @@ Deque<TempT, Alloc>::Deque(Deque<TempT, Alloc>&& deq)
     : num_of_chunks_(deq.num_of_chunks_),
       id_start_(deq.id_start_),
       id_finish_(deq.id_finish_),
+      size_(deq.size_),
       type_alloc_(deq.type_alloc_),
       chunk_alloc_(deq.chunk_alloc_),
       vec_of_chunks_(deq.vec_of_chunks_) {
-  deq.id_finish_ = 0;
-  deq.id_start_ = 0;
-  deq.num_of_chunks_ = 0;
-  deq.vec_of_chunks_ = nullptr;
+  // посмотреть как делается в стандарте уже понял просто надо саллоцировать
+  // памать под одну ноду
+  deq.id_finish_ = kDefaultDequeLenth / 2;
+  deq.id_start_ = kDefaultDequeLenth / 2 - 1;
+  deq.num_of_chunks_ = kDefaultDequeLenth;
+  deq.size_ = 0;
+  try {
+    deq.vec_of_chunks_ = pr_vec_allocate(kDefaultDequeLenth);
+    ++deq.id_start_;
+  } catch (...) {
+    deq.id_start_ = id_start_;
+    deq.id_finish_ = id_finish_;
+    deq.size_ = size_;
+    deq.vec_of_chunks_ = vec_of_chunks_;
+    deq.num_of_chunks_ = num_of_chunks_;
+    throw;
+  }
 }
 template <typename TempT, typename Alloc>
 Deque<TempT, Alloc>& Deque<TempT, Alloc>::operator=(
@@ -668,7 +707,7 @@ Deque<TempT, Alloc>& Deque<TempT, Alloc>::operator=(
     pr_clear();
     return *this;
   }
-  iterator iter2 = deq.begin();
+  const_iterator iter2 = deq.begin();
   if (!empty()) {
     size_t min_of_two = std::min(size(), deq.size());
     iterator iter1 = begin();
@@ -704,7 +743,8 @@ Deque<TempT, Alloc>& Deque<TempT, Alloc>::operator=(
   id_finish_ = deq.id_finish_;
   id_start_ = deq.id_start_;
   num_of_chunks_ = deq.num_of_chunks_;
-  deq.id_finish_ = deq.id_start_ = deq.num_of_chunks_ = 0;
+  size_ = deq.size_;
+  deq.id_finish_ = deq.id_start_ = deq.num_of_chunks_ = deq.size_ = 0;
   deq.vec_of_chunks_ = nullptr;
   return *this;
 }
@@ -766,8 +806,9 @@ template <typename... Args>
 void Deque<TempT, Alloc>::emplace_back(Args&&... args) {
   if (vec_of_chunks_ == nullptr) {
     id_finish_ = kDefaultDequeLenth / 2;
-    id_start_ = kDefaultDequeLenth / 2 - 1;
+    id_start_ = kDefaultDequeLenth / 2 - 2;
     vec_of_chunks_ = pr_vec_allocate(kDefaultDequeLenth);
+    ++id_start_;
     num_of_chunks_ = kDefaultDequeLenth;
   }
   if ((vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ == set_chunk_rank()) {
@@ -802,7 +843,7 @@ void Deque<TempT, Alloc>::emplace_front(Args&&... args) {
   }
   if ((vec_of_chunks_ + id_start_)->chunk_head_id_ == 0) {
     if (id_start_ == 0) {
-      pr_vec_reallocation(num_of_chunks_ * 2);
+      pr_vec_reallocation(num_of_chunks_ * 2, num_of_chunks_);
     }
     --id_start_;
   }
@@ -833,11 +874,11 @@ void Deque<TempT, Alloc>::emplace(const_iterator pos, Args&&... args) {
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_back(TempT&& elem) {
-  emplace_back(elem);
+  emplace_back(std::move(elem));
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_front(TempT&& elem) {
-  emplace_front(elem);
+  emplace_front(std::move(elem));
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::push_back(const TempT& elem) {
@@ -853,7 +894,7 @@ void Deque<TempT, Alloc>::insert(const_iterator pos, const TempT& value) {
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::insert(const_iterator pos, TempT&& value) {
-  emplace(pos, std::move_if_noexcept(value));
+  emplace(pos, std::move(value));
 }
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::pop_back() noexcept {
@@ -886,7 +927,7 @@ void Deque<TempT, Alloc>::pop_front() noexcept {
 template <typename TempT, typename Alloc>
 void Deque<TempT, Alloc>::erase(const_iterator pos) noexcept {
   const size_t kDelta = size() - (pos - begin()) - 1;
-  iterator iter = pos;
+  iterator iter = begin() + (pos - begin());
   for (size_t i = 0; i < kDelta; ++i) {
     std::swap(*iter, *(iter + 1));
   }
@@ -896,40 +937,54 @@ void Deque<TempT, Alloc>::erase(const_iterator pos) noexcept {
 //***************Iterator methods****************
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::begin() noexcept {
-  return iterator(vec_of_chunks_ + id_start_,
-                  (vec_of_chunks_ + id_start_)->chunk_head_id_);
+  return (vec_of_chunks_ == nullptr)
+             ? iterator()
+             : iterator(vec_of_chunks_ + id_start_,
+                        (vec_of_chunks_ + id_start_)->chunk_head_id_);
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::begin()
     const noexcept {
-  return const_iterator(vec_of_chunks_ + id_start_,
-                        (vec_of_chunks_ + id_start_)->chunk_head_id_);
+  return (vec_of_chunks_ == nullptr)
+             ? const_iterator()
+             : const_iterator(vec_of_chunks_ + id_start_,
+                              (vec_of_chunks_ + id_start_)->chunk_head_id_);
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::cbegin()
     const noexcept {
-  return const_iterator(vec_of_chunks_ + id_start_,
-                        (vec_of_chunks_ + id_start_)->chunk_head_id_);
+  return (vec_of_chunks_ == nullptr)
+             ? const_iterator()
+             : const_iterator(vec_of_chunks_ + id_start_,
+                              (vec_of_chunks_ + id_start_)->chunk_head_id_);
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::iterator Deque<TempT, Alloc>::end() noexcept {
-  return iterator(vec_of_chunks_ + id_finish_ - 1,
-                  (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
-         1;
+  return (vec_of_chunks_ == nullptr)
+             ? iterator()
+             : iterator(vec_of_chunks_ + id_finish_ - 1,
+                        (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
+                   1;
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::end()
     const noexcept {
-  return const_iterator(vec_of_chunks_ + id_finish_ - 1,
-                        (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
-         1;
+  return (vec_of_chunks_ == nullptr)
+             ? const_iterator()
+             : const_iterator(
+                   vec_of_chunks_ + id_finish_ - 1,
+                   (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
+                   1;
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::const_iterator Deque<TempT, Alloc>::cend()
     const noexcept {
-  return const_iterator(vec_of_chunks_ + id_finish_ - 1,
-                        (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
-         1;
+  return (vec_of_chunks_ == nullptr)
+             ? const_iterator()
+             : const_iterator(
+                   vec_of_chunks_ + id_finish_ - 1,
+                   (vec_of_chunks_ + id_finish_ - 1)->chunk_tail_id_ - 1) +
+                   1;
 }
 template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::reverse_iterator
@@ -960,6 +1015,27 @@ template <typename TempT, typename Alloc>
 typename Deque<TempT, Alloc>::const_reverse_iterator
 Deque<TempT, Alloc>::crend() const noexcept {
   return typename Deque<TempT, Alloc>::const_reverse_iterator(begin());
+}
+//***********************************************
+//**************Compare Operators****************
+template <typename TempT, typename Alloc = std::allocator<TempT>>
+bool operator==(const Deque<TempT, Alloc>& left,
+                const Deque<TempT, Alloc>& right) noexcept {
+  if (left.size() != right.size()) {
+    return false;
+  }
+  typename Deque<TempT, Alloc>::const_iterator itl(left.begin());
+  typename Deque<TempT, Alloc>::const_iterator itr(right.begin());
+  while (itl != left.end() && itr != right.end() && *itl == *itr) {
+    ++itl;
+    ++itr;
+  }
+  return itl == left.end() && itr == right.end();
+}
+template <typename TempT, typename Alloc = std::allocator<TempT>>
+bool operator!=(const Deque<TempT, Alloc>& left,
+                const Deque<TempT, Alloc>& right) noexcept {
+  return !(left == right);
 }
 //***********************************************
 //===============================================
