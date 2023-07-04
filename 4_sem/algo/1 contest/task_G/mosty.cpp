@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 // 1g
-// wa26
+// wa26 
 class Solution {
   enum Color { WHITE, GREY, BLACK };
   struct Node;
