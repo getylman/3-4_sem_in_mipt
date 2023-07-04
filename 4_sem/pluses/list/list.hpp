@@ -287,9 +287,7 @@ struct List<TempT, Alloc>::Node {
 //================Iterator==================
 template <typename TempT, typename Alloc>
 template <bool IsConst>
-class List<TempT, Alloc>::common_iterator
-    : public std::iterator<std::bidirectional_iterator_tag,
-                           std::conditional_t<IsConst, const TempT, TempT>> {
+class List<TempT, Alloc>::common_iterator : public std::iterator<std::bidirectional_iterator_tag, std::conditional_t<IsConst, const TempT, TempT>> {
   //***************Fields*******************
   /// TODO: тут надо отдельно в поле хранить conditioanal_ptr
   Node* cur_node_;
