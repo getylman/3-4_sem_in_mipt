@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 // 2a
-// wa7
+// wa7 
 class Solution {
   const uint64_t kInf = INT64_MAX;
   using Edge = std::pair<uint64_t, uint64_t>;

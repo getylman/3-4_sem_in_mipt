@@ -2,7 +2,7 @@
 #include <vector>
 // 2e
 class Solution {
-  // const int64_t kInf = 0xeffffff0;
+  // const int64_t kInf = 0xeffffff0; 
   struct Node {
     uint16_t value = 0;
     uint16_t parent = (uint16_t)-1;

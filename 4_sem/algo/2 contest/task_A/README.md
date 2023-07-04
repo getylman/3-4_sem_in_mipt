@@ -21,4 +21,4 @@ A. Подлые карты
 Примечания
 There are N graphs are given. The task is to find the shortest path from start vertex to each other one in it.
 
-Could you translate it into russian?
+Could you translate it into russian? 

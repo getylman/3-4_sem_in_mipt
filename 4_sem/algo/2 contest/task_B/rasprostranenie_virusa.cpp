@@ -31,7 +31,7 @@ class Solution {
     for (const auto& i : edges) {
       adj_list_[i.first.first].neighbours.push_back({i.first.second, i.second});
       // adj_list_[i.first.second].neighbours.push_back({i.first.first,
-      // i.second});
+      // i.second}); 
     }
   }
   static Edge ExtractMin(std::set<Edge>& heap) {

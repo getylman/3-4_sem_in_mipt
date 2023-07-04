@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-// 2g
+// 2g 
 class Solution {
  public:
   static void Answer(const size_t& vertexes, std::vector<bool>& connections) {
