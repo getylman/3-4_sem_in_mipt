@@ -4,11 +4,6 @@
  * @date 15.05.2023
  */
 
-/*
- * Я ЗАПРЕЩАЮ КОМУ ЛИБО МЕНЬ РАНГ ДЕКА
- * ПРОБЛЕМЫ НА ВАЩУ СОВЕСТЬ
- */
-
 #pragma once
 #include <cstddef>
 #include <cstdint>
